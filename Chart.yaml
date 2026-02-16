@@ -1,0 +1,20 @@
+apiVersion: v2
+name: nebari-lgtm-pack
+description: A Helm chart for deploying the Grafana LGTM observability stack (Loki, Grafana, Tempo, Mimir) on Kubernetes
+type: application
+version: 0.1.0-alpha.1
+appVersion: "1.0.0"
+
+dependencies:
+  - name: grafana
+    version: 10.5.15
+    repository: https://grafana.github.io/helm-charts
+  - name: loki
+    version: 6.53.0
+    repository: https://grafana.github.io/helm-charts
+  - name: tempo
+    version: 1.24.4
+    repository: https://grafana.github.io/helm-charts
+  - name: mimir-distributed
+    version: 6.0.5
+    repository: https://grafana.github.io/helm-charts

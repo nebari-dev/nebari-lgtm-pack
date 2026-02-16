@@ -1,0 +1,224 @@
+# Default values for nebari-lgtm-pack
+# This is a YAML-formatted file.
+
+# =============================================================================
+# Nebari Integration
+# =============================================================================
+# Creates a NebariApp CRD that configures routing and auth via nebari-operator.
+# Set to false when deploying outside of Nebari.
+nebariapp:
+  enabled: true
+  # hostname: grafana.nic.local  # Required when enabled
+  service:
+    # Grafana service (created by grafana subchart)
+    name: ""  # Defaults to <release>-grafana
+    port: 80
+  # routing:
+  #   routes:
+  #     - pathPrefix: /
+  #       pathType: Prefix
+  auth:
+    enabled: true
+    provider: keycloak
+    provisionClient: true
+    redirectURI: /login/generic_oauth
+    scopes:
+      - openid
+      - profile
+      - email
+      - groups
+  # Additional services exposed through the NebariApp for push endpoints
+  # additionalServices:
+  #   - name: loki-push
+  #     service:
+  #       name: <release>-loki
+  #       port: 3100
+  #     routing:
+  #       routes:
+  #         - pathPrefix: /loki
+  #           pathType: Prefix
+  #   - name: tempo-push
+  #     service:
+  #       name: <release>-tempo
+  #       port: 4318
+  #     routing:
+  #       routes:
+  #         - pathPrefix: /tempo
+  #           pathType: Prefix
+  #   - name: mimir-push
+  #     service:
+  #       name: <release>-mimir-distributed-nginx
+  #       port: 80
+  #     routing:
+  #       routes:
+  #         - pathPrefix: /mimir
+  #           pathType: Prefix
+
+# =============================================================================
+# Grafana
+# =============================================================================
+# All values under this key are passed to the grafana subchart.
+# Ref: https://github.com/grafana/helm-charts/tree/main/charts/grafana
+grafana:
+  # Admin credentials for local dev (override in production)
+  adminUser: admin
+  adminPassword: admin
+
+  # Datasources are provisioned via templates/grafana-datasources.yaml ConfigMap
+  # which uses Helm templating to resolve in-cluster service URLs.
+  # The sidecar watches for ConfigMaps with the grafana_datasource label.
+  sidecar:
+    datasources:
+      enabled: true
+
+  service:
+    type: ClusterIP
+
+  # Grafana configuration for OAuth (used when Nebari provides credentials)
+  # grafana.ini:
+  #   server:
+  #     root_url: https://<your-domain>/
+  #   auth.generic_oauth:
+  #     enabled: true
+  #     name: Keycloak
+  #     client_id: grafana
+  #     client_secret: <your-client-secret>
+  #     scopes: openid profile email groups
+  #     auth_url: https://<keycloak-host>/realms/<realm>/protocol/openid-connect/auth
+  #     token_url: https://<keycloak-host>/realms/<realm>/protocol/openid-connect/token
+  #     api_url: https://<keycloak-host>/realms/<realm>/protocol/openid-connect/userinfo
+  #     role_attribute_path: contains(groups[*], 'admin') && 'Admin' || 'Viewer'
+
+# =============================================================================
+# Loki — Log Aggregation
+# =============================================================================
+# All values under this key are passed to the loki subchart.
+# Ref: https://github.com/grafana/helm-charts/tree/main/charts/loki
+loki:
+  # Lightweight single-binary mode for local development
+  deploymentMode: SingleBinary
+  loki:
+    auth_enabled: false
+    commonConfig:
+      replication_factor: 1
+    schemaConfig:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+    storage:
+      type: filesystem
+  singleBinary:
+    replicas: 1
+    persistence:
+      size: 10Gi
+  # Disable components not needed in single-binary mode
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+  backend:
+    replicas: 0
+  gateway:
+    enabled: false
+  chunksCache:
+    enabled: false
+  resultsCache:
+    enabled: false
+
+# =============================================================================
+# Tempo — Distributed Tracing
+# =============================================================================
+# All values under this key are passed to the tempo subchart.
+# Ref: https://github.com/grafana/helm-charts/tree/main/charts/tempo
+tempo:
+  tempo:
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/traces
+        wal:
+          path: /var/tempo/wal
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+  persistence:
+    enabled: true
+    size: 10Gi
+
+# =============================================================================
+# Mimir — Metrics (Prometheus-compatible)
+# =============================================================================
+# All values under this key are passed to the mimir-distributed subchart.
+# Ref: https://github.com/grafana/helm-charts/tree/main/charts/mimir-distributed
+mimir-distributed:
+  # Lightweight config for local development — single replicas, no Kafka, filesystem storage
+  mimir:
+    structuredConfig:
+      common:
+        storage:
+          backend: filesystem
+      ingest_storage:
+        enabled: false
+      ingester:
+        push_grpc_method_enabled: true
+      blocks_storage:
+        backend: filesystem
+        filesystem:
+          dir: /data/mimir-blocks
+      compactor:
+        data_dir: /data/mimir-compactor
+      ruler_storage:
+        backend: filesystem
+        filesystem:
+          dir: /data/mimir-rules
+  # Single replicas for local dev
+  ingester:
+    replicas: 1
+    zoneAwareReplication:
+      enabled: false
+    persistence:
+      size: 10Gi
+  distributor:
+    replicas: 1
+  querier:
+    replicas: 1
+  query_frontend:
+    replicas: 1
+  store_gateway:
+    replicas: 1
+    zoneAwareReplication:
+      enabled: false
+    persistence:
+      size: 10Gi
+  compactor:
+    replicas: 1
+    persistence:
+      size: 10Gi
+  # Gateway for unified Mimir API access
+  gateway:
+    replicas: 1
+  # Disable components not needed for local dev
+  kafka:
+    enabled: false
+  minio:
+    enabled: false
+  rollout_operator:
+    enabled: false
+  overrides_exporter:
+    replicas: 0
+  ruler:
+    replicas: 0
+  alertmanager:
+    replicas: 0
+  query_scheduler:
+    replicas: 0

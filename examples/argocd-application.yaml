@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lgtm-pack
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: nebari-packs
+    app.kubernetes.io/managed-by: nebari-infrastructure-core
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    chart: nebari-lgtm-pack
+    repoURL: https://nebari-dev.github.io/nebari-lgtm-pack/
+    targetRevision: 0.1.0-alpha.1
+    helm:
+      releaseName: lgtm-pack
+      values: |
+        nebariapp:
+          hostname: grafana.tylernictest.nebari.dev
+          routing:
+            routes:
+              - pathPrefix: /
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    managedNamespaceMetadata:
+      labels:
+        nebari.dev/managed: "true"
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

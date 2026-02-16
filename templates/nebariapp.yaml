@@ -1,0 +1,33 @@
+{{- if .Values.nebariapp.enabled }}
+apiVersion: reconcilers.nebari.dev/v1
+kind: NebariApp
+metadata:
+  name: {{ include "nebari-lgtm-pack.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nebari-lgtm-pack.labels" . | nindent 4 }}
+spec:
+  hostname: {{ required "nebariapp.hostname is required when nebariapp.enabled is true" .Values.nebariapp.hostname }}
+  service:
+    name: {{ .Values.nebariapp.service.name | default (printf "%s-grafana" .Release.Name) }}
+    port: {{ .Values.nebariapp.service.port | default 80 }}
+  {{- with .Values.nebariapp.routing }}
+  routing:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.nebariapp.auth }}
+  auth:
+    enabled: {{ .enabled | default true }}
+    provider: {{ .provider | default "keycloak" }}
+    provisionClient: {{ .provisionClient | default true }}
+    redirectURI: {{ .redirectURI | default "/login/generic_oauth" }}
+    {{- with .scopes }}
+    scopes:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  {{- with .Values.nebariapp.additionalServices }}
+  additionalServices:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

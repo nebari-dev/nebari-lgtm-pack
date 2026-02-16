@@ -1,0 +1,107 @@
+name: Test Deployment
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+      - name: Create k3d cluster
+        run: k3d cluster create test --wait
+
+      - name: Install Helm
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Update Helm dependencies
+        run: helm dependency update
+
+      - name: Deploy chart
+        run: helm install lgtm-pack . --namespace default --set nebariapp.enabled=false --timeout 10m
+
+      - name: Wait for Grafana
+        run: |
+          for i in {1..60}; do
+            echo "=== Attempt $i/60 ==="
+            kubectl get pods
+            if kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana --timeout=5s 2>/dev/null; then
+              echo "Grafana pod ready!"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Timeout waiting for Grafana"
+          exit 1
+
+      - name: Test Grafana health endpoint
+        run: |
+          kubectl port-forward svc/lgtm-pack-grafana 3000:80 &
+          PF_PID=$!
+          sleep 5
+          echo "=== Grafana health check ==="
+          curl -sS http://localhost:3000/api/health
+          echo ""
+          curl -sS http://localhost:3000/api/health | grep -q '"database": "ok"'
+          RESULT=$?
+          kill $PF_PID 2>/dev/null || true
+          exit $RESULT
+
+      - name: Test datasource provisioning
+        run: |
+          kubectl port-forward svc/lgtm-pack-grafana 3000:80 &
+          PF_PID=$!
+          sleep 5
+          echo "=== Checking datasources ==="
+          curl -sS -u admin:admin http://localhost:3000/api/datasources
+          echo ""
+          # Verify Loki datasource exists
+          curl -sS -u admin:admin http://localhost:3000/api/datasources | grep -q '"name":"Loki"'
+          RESULT=$?
+          kill $PF_PID 2>/dev/null || true
+          exit $RESULT
+
+      - name: Test Loki log push and query
+        run: |
+          kubectl port-forward svc/lgtm-pack-loki 3100:3100 &
+          PF_PID=$!
+          sleep 5
+          # Push a test log entry
+          echo "=== Pushing test log ==="
+          curl -sS -X POST http://localhost:3100/loki/api/v1/push \
+            -H "Content-Type: application/json" \
+            -d '{"streams":[{"stream":{"job":"ci-test"},"values":[["'$(date +%s)000000000'","hello from CI"]]}]}'
+          echo ""
+          # Query for it
+          echo "=== Querying Loki ==="
+          sleep 2
+          curl -sS 'http://localhost:3100/loki/api/v1/query?query={job="ci-test"}'
+          echo ""
+          kill $PF_PID 2>/dev/null || true
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          echo "=== Grafana logs ==="
+          kubectl logs -l app.kubernetes.io/name=grafana --tail=100 2>/dev/null || true
+          echo "=== Loki logs ==="
+          kubectl logs -l app.kubernetes.io/name=loki --tail=100 2>/dev/null || true
+          echo "=== Tempo logs ==="
+          kubectl logs -l app.kubernetes.io/name=tempo --tail=100 2>/dev/null || true
+          echo "=== Mimir logs ==="
+          kubectl logs -l app.kubernetes.io/name=mimir --tail=100 2>/dev/null || true
+          echo "=== All pods ==="
+          kubectl get pods -o wide
+          echo "=== Events ==="
+          kubectl get events --sort-by=.lastTimestamp

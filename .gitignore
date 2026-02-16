@@ -1,0 +1,15 @@
+# Helm dependencies (regenerated via helm dependency update)
+charts/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude
+CLAUDE.md
