@@ -97,26 +97,26 @@ grafana:
   dashboards:
     kubernetes:
       k8s-views-global:
-        gnetId: 15761
-        revision: 37
-        datasource:
-          - name: DS_PROMETHEUS
-            value: Mimir
-      k8s-views-nodes:
-        gnetId: 15760
-        revision: 35
-        datasource:
-          - name: DS_PROMETHEUS
-            value: Mimir
-      k8s-views-pods:
         gnetId: 15757
-        revision: 37
+        revision: 43
         datasource:
           - name: DS_PROMETHEUS
             value: Mimir
       k8s-views-namespaces:
+        gnetId: 15758
+        revision: 44
+        datasource:
+          - name: DS_PROMETHEUS
+            value: Mimir
+      k8s-views-nodes:
         gnetId: 15759
-        revision: 28
+        revision: 40
+        datasource:
+          - name: DS_PROMETHEUS
+            value: Mimir
+      k8s-views-pods:
+        gnetId: 15760
+        revision: 37
         datasource:
           - name: DS_PROMETHEUS
             value: Mimir
@@ -293,3 +293,14 @@ promtail:
 # auto-discovers it via the kubernetes-pods scrape job.
 kube-state-metrics:
   prometheusScrape: true
+
+# =============================================================================
+# prometheus-node-exporter — Node-level Metrics
+# =============================================================================
+# DaemonSet that exposes node CPU, memory, disk, and network metrics.
+# Required by the Kubernetes / Views / Global and Nodes dashboards.
+# Pod annotations are needed because the OTel collector discovers via role: pod.
+prometheus-node-exporter:
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
