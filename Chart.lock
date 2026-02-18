@@ -11,5 +11,11 @@ dependencies:
 - name: mimir-distributed
   repository: https://grafana.github.io/helm-charts
   version: 6.0.5
-digest: sha256:a830f8dd69f9e89c0eadf10e4eb799c4784eb620e9a0ca75f0b276d07c3c63c1
-generated: "2026-02-16T10:55:22.895661-06:00"
+- name: promtail
+  repository: https://grafana.github.io/helm-charts
+  version: 6.17.1
+- name: kube-state-metrics
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 7.1.0
+digest: sha256:ddfbde1cf68b630cb633d2b8dc86e5c61061963251427a85d781c771393448ea
+generated: "2026-02-18T14:31:42.750482-06:00"

@@ -16,6 +16,7 @@ data:
     apiVersion: 1
     datasources:
       - name: Loki
+        uid: loki
         type: loki
         access: proxy
         url: http://{{ .Release.Name }}-loki:3100
@@ -33,6 +34,7 @@ data:
           nodeGraph:
             enabled: true
       - name: Mimir
+        uid: mimir
         type: prometheus
         access: proxy
         url: http://{{ .Release.Name }}-mimir-gateway/prometheus

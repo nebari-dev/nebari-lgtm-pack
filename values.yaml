@@ -70,6 +70,56 @@ grafana:
   sidecar:
     datasources:
       enabled: true
+    dashboards:
+      enabled: true
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: kubernetes
+          orgId: 1
+          folder: Kubernetes
+          type: file
+          disableDeletion: true
+          editable: false
+          options:
+            path: /var/lib/grafana/dashboards/kubernetes
+        - name: nebari
+          orgId: 1
+          folder: Nebari
+          type: file
+          disableDeletion: true
+          editable: false
+          options:
+            path: /var/lib/grafana/dashboards/nebari
+
+  dashboards:
+    kubernetes:
+      k8s-views-global:
+        gnetId: 15761
+        revision: 37
+        datasource:
+          - name: DS_PROMETHEUS
+            value: Mimir
+      k8s-views-nodes:
+        gnetId: 15760
+        revision: 35
+        datasource:
+          - name: DS_PROMETHEUS
+            value: Mimir
+      k8s-views-pods:
+        gnetId: 15757
+        revision: 37
+        datasource:
+          - name: DS_PROMETHEUS
+            value: Mimir
+      k8s-views-namespaces:
+        gnetId: 15759
+        revision: 28
+        datasource:
+          - name: DS_PROMETHEUS
+            value: Mimir
 
   service:
     type: ClusterIP
@@ -223,3 +273,23 @@ mimir-distributed:
     replicas: 0
   query_scheduler:
     replicas: 1
+
+# =============================================================================
+# Promtail — Log Collection
+# =============================================================================
+# Promtail DaemonSet scrapes container logs from /var/log/containers/ on each
+# node and ships them to Loki. Default config handles CRI log format and
+# enriches with pod/namespace/container labels.
+promtail:
+  config:
+    clients:
+      - url: http://lgtm-pack-loki:3100/loki/api/v1/push
+
+# =============================================================================
+# kube-state-metrics — Kubernetes Object Metrics
+# =============================================================================
+# Exposes pod status, resource requests/limits, and other object-level metrics.
+# prometheusScrape adds prometheus.io/scrape annotation so OTel collector
+# auto-discovers it via the kubernetes-pods scrape job.
+kube-state-metrics:
+  prometheusScrape: true

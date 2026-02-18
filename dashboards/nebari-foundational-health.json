@@ -1,0 +1,167 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Health overview of Nebari foundational infrastructure components",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "title": "LGTM Stack Pod Readiness",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "uid": "mimir", "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "color": "red", "text": "Not Ready" }, "1": { "color": "green", "text": "Ready" } }, "type": "value" }
+          ],
+          "custom": {
+            "displayMode": "color-background-solid",
+            "align": "center"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Time" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "pod", "desc": false }]
+      },
+      "targets": [
+        {
+          "expr": "kube_pod_status_ready{condition=\"true\", pod=~\".*loki.*|.*tempo.*|.*mimir.*|.*grafana.*|.*opentelemetry.*|.*promtail.*|.*kube-state-metrics.*\"}",
+          "legendFormat": "{{pod}}",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "title": "LGTM Pod Readiness Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "uid": "mimir", "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 30
+          },
+          "min": 0,
+          "max": 1
+        }
+      },
+      "targets": [
+        {
+          "expr": "kube_pod_status_ready{condition=\"true\", pod=~\".*loki.*|.*tempo.*|.*mimir.*|.*grafana.*|.*opentelemetry.*\"}",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "ArgoCD Application Sync Status",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 10 },
+      "datasource": { "uid": "mimir", "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "color-background-solid",
+            "align": "center"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Time" },
+            "properties": [{ "id": "custom.hidden", "value": true }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "sync_status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "options": { "Synced": { "color": "green", "text": "Synced" }, "OutOfSync": { "color": "orange", "text": "Out of Sync" }, "Unknown": { "color": "red", "text": "Unknown" } }, "type": "value" }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "health_status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "options": { "Healthy": { "color": "green", "text": "Healthy" }, "Degraded": { "color": "red", "text": "Degraded" }, "Progressing": { "color": "yellow", "text": "Progressing" }, "Missing": { "color": "red", "text": "Missing" } }, "type": "value" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "expr": "argocd_app_info",
+          "legendFormat": "{{name}}",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "title": "Certificate Expiry (Days Remaining)",
+      "type": "bargauge",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 10 },
+      "datasource": { "uid": "mimir", "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 7 },
+              { "color": "green", "value": 30 }
+            ]
+          },
+          "unit": "d",
+          "min": 0
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "expr": "(certmanager_certificate_expiration_timestamp_seconds - time()) / 86400",
+          "legendFormat": "{{name}} ({{namespace}})",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nebari", "infrastructure", "health"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Nebari Foundational Health",
+  "uid": "nebari-foundational-health",
+  "version": 1
+}
