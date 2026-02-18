@@ -78,3 +78,8 @@ k8s_resource(
     workload='lgtm-pack-mimir-store-gateway',
     labels=['mimir'],
 )
+
+k8s_resource(
+    workload='lgtm-pack-mimir-query-scheduler',
+    labels=['mimir'],
+)

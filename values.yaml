@@ -164,6 +164,7 @@ mimir-distributed:
   # Lightweight config for local development — single replicas, no Kafka, filesystem storage
   mimir:
     structuredConfig:
+      multitenancy_enabled: false
       common:
         storage:
           backend: filesystem
@@ -221,4 +222,4 @@ mimir-distributed:
   alertmanager:
     replicas: 0
   query_scheduler:
-    replicas: 0
+    replicas: 1

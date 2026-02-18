@@ -1,0 +1,36 @@
+# OpenTelemetry Collector overrides for nebari-lgtm-pack
+#
+# Copy this file to your GitOps repository at:
+#   manifests/opentelemetry-collector/overrides.yaml
+#
+# These values are deep-merged with the base OTel collector config.
+# Exporter endpoints assume the Helm release name "lgtm-pack" —
+# adjust if your release name differs.
+config:
+  exporters:
+    otlphttp/loki:
+      endpoint: http://lgtm-pack-loki:3100/otlp
+      tls:
+        insecure: true
+    otlp/tempo:
+      endpoint: http://lgtm-pack-tempo:4317
+      tls:
+        insecure: true
+    otlphttp/mimir:
+      endpoint: http://lgtm-pack-mimir-gateway/otlp
+      tls:
+        insecure: true
+  service:
+    pipelines:
+      logs:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [otlphttp/loki]
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [otlp/tempo]
+      metrics:
+        receivers: [otlp, prometheus]
+        processors: [memory_limiter, batch]
+        exporters: [otlphttp/mimir]
