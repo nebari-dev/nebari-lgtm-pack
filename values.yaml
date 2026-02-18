@@ -293,6 +293,9 @@ promtail:
 # auto-discovers it via the kubernetes-pods scrape job.
 kube-state-metrics:
   prometheusScrape: true
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
 
 # =============================================================================
 # prometheus-node-exporter — Node-level Metrics
