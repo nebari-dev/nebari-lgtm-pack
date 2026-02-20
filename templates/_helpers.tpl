@@ -49,3 +49,18 @@ Selector labels
 app.kubernetes.io/name: {{ include "nebari-lgtm-pack.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+OIDC client secret name (created by nebari-operator).
+Pattern: <fullname>-oidc-client
+*/}}
+{{- define "nebari-lgtm-pack.oidc-secret-name" -}}
+{{ include "nebari-lgtm-pack.fullname" . }}-oidc-client
+{{- end }}
+
+{{/*
+Keycloak OIDC base URL for constructing auth/token/userinfo endpoints.
+*/}}
+{{- define "nebari-lgtm-pack.keycloak-oidc-url" -}}
+https://{{ .Values.nebariapp.keycloakHostname }}/auth/realms/{{ .Values.nebariapp.keycloakRealm | default "nebari" }}/protocol/openid-connect
+{{- end }}

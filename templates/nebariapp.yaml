@@ -22,6 +22,9 @@ spec:
     provisionClient: {{ .provisionClient | default true }}
     gatewayAuth: {{ .gatewayAuth | default false }}
     redirectURI: {{ .redirectURI | default "/login/generic_oauth" }}
+    {{- with .clientSecretRef }}
+    clientSecretRef: {{ . }}
+    {{- end }}
     {{- with .scopes }}
     scopes:
       {{- toYaml . | nindent 6 }}
