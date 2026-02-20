@@ -22,7 +22,7 @@ nebariapp:
     enabled: true
     provider: keycloak
     provisionClient: true
-    gatewayAuth: false
+    enforceAtGateway: false
     redirectURI: /login/generic_oauth
     scopes:
       - openid

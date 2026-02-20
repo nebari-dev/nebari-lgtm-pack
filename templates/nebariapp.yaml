@@ -20,7 +20,7 @@ spec:
     enabled: {{ .enabled | default true }}
     provider: {{ .provider | default "keycloak" }}
     provisionClient: {{ .provisionClient | default true }}
-    gatewayAuth: {{ .gatewayAuth | default false }}
+    enforceAtGateway: {{ .enforceAtGateway | default false }}
     redirectURI: {{ .redirectURI | default "/login/generic_oauth" }}
     {{- with .clientSecretRef }}
     clientSecretRef: {{ . }}
