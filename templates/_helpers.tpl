@@ -53,9 +53,17 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{/*
 OIDC client secret name (created by nebari-operator).
 Pattern: <fullname>-oidc-client
+This helper hardcodes the chart name instead of using .Chart.Name so it
+produces the correct name even when evaluated via tpl in subchart context
+(where .Chart.Name would be the subchart's name, not the parent's).
 */}}
 {{- define "nebari-lgtm-pack.oidc-secret-name" -}}
-{{ include "nebari-lgtm-pack.fullname" . }}-oidc-client
+{{- $chartName := "nebari-lgtm-pack" -}}
+{{- if contains $chartName .Release.Name -}}
+{{- printf "%s-oidc-client" .Release.Name -}}
+{{- else -}}
+{{- printf "%s-%s-oidc-client" .Release.Name $chartName -}}
+{{- end -}}
 {{- end }}
 
 {{/*
