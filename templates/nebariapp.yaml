@@ -29,6 +29,14 @@ spec:
     scopes:
       {{- toYaml . | nindent 6 }}
     {{- end }}
+    {{- with .groups }}
+    groups:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .keycloakConfig }}
+    keycloakConfig:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
   {{- end }}
   {{- with .Values.nebariapp.additionalServices }}
   additionalServices:

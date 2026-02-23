@@ -29,6 +29,21 @@ nebariapp:
       - profile
       - email
       - groups
+    # groups: []           # Groups to create in Keycloak (e.g., [admin, viewer])
+    # keycloakConfig:      # Advanced Keycloak client configuration
+    #   groups:            # Groups with optional member assignments
+    #     - name: admin
+    #       members: [nebari-admin]
+    #     - name: viewer
+    #   protocolMappers:   # Client-level protocol mappers
+    #     - name: group-membership
+    #       protocolMapper: oidc-group-membership-mapper
+    #       config:
+    #         claim.name: groups
+    #         full.path: "false"
+    #         id.token.claim: "true"
+    #         access.token.claim: "true"
+    #         userinfo.token.claim: "true"
   # Additional services exposed through the NebariApp for push endpoints
   # additionalServices:
   #   - name: loki-push
