@@ -1,0 +1,37 @@
+apiVersion: v1
+entries:
+  nebari-lgtm-pack:
+  - apiVersion: v2
+    appVersion: 1.0.0
+    created: "2026-03-10T17:48:18.513476434Z"
+    dependencies:
+    - name: grafana
+      repository: https://grafana.github.io/helm-charts
+      version: 10.5.15
+    - name: loki
+      repository: https://grafana.github.io/helm-charts
+      version: 6.53.0
+    - name: tempo
+      repository: https://grafana.github.io/helm-charts
+      version: 1.24.4
+    - name: mimir-distributed
+      repository: https://grafana.github.io/helm-charts
+      version: 6.0.5
+    - name: promtail
+      repository: https://grafana.github.io/helm-charts
+      version: 6.17.1
+    - name: kube-state-metrics
+      repository: https://prometheus-community.github.io/helm-charts
+      version: 7.1.0
+    - name: prometheus-node-exporter
+      repository: https://prometheus-community.github.io/helm-charts
+      version: 4.51.1
+    description: A Helm chart for deploying the Grafana LGTM observability stack (Loki,
+      Grafana, Tempo, Mimir) on Kubernetes
+    digest: 6bb12ecd838d44d9507b75bb5a148a71494865bf250e526df916d78e423259a4
+    name: nebari-lgtm-pack
+    type: application
+    urls:
+    - https://github.com/nebari-dev/nebari-lgtm-pack/releases/download/nebari-lgtm-pack-0.1.0-alpha.3/nebari-lgtm-pack-0.1.0-alpha.3.tgz
+    version: 0.1.0-alpha.3
+generated: "2026-03-10T17:48:18.478795427Z"
