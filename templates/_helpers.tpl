@@ -70,5 +70,5 @@ produces the correct name even when evaluated via tpl in subchart context
 Keycloak OIDC base URL for constructing auth/token/userinfo endpoints.
 */}}
 {{- define "nebari-lgtm-pack.keycloak-oidc-url" -}}
-https://{{ .Values.nebariapp.keycloakHostname }}/auth/realms/{{ .Values.nebariapp.keycloakRealm | default "nebari" }}/protocol/openid-connect
+https://{{ .Values.nebariapp.keycloakHostname }}/realms/{{ .Values.nebariapp.keycloakRealm | default "nebari" }}/protocol/openid-connect
 {{- end }}
