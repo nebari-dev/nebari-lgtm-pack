@@ -14,15 +14,13 @@ spec:
   source:
     chart: nebari-lgtm-pack
     repoURL: https://nebari-dev.github.io/nebari-lgtm-pack/
-    targetRevision: 0.1.0-alpha.1
+    targetRevision: 0.1.0-alpha.6
     helm:
       releaseName: lgtm-pack
       values: |
         nebariapp:
-          hostname: grafana.tylernictest.nebari.dev
-          routing:
-            routes:
-              - pathPrefix: /
+          hostname: grafana.example.com
+          keycloakHostname: keycloak.example.com
 
   destination:
     server: https://kubernetes.default.svc
