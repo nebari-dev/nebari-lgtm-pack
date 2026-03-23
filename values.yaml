@@ -10,6 +10,7 @@ nebariapp:
   enabled: true
   # hostname: grafana.nic.local  # Required when enabled
   # keycloakHostname: ""         # Required when auth.enabled (e.g., keycloak.example.com)
+  keycloakBasePath: ""           # Set to "/auth" for legacy Keycloak (<v17)
   keycloakRealm: nebari          # Keycloak realm name
   service:
     # Grafana service (created by grafana subchart)
