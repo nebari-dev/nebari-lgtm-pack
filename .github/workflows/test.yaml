@@ -29,7 +29,12 @@ jobs:
         run: helm dependency update
 
       - name: Deploy chart
-        run: helm install lgtm-pack . --namespace default --set nebariapp.enabled=false --timeout 10m
+        run: |
+          helm install lgtm-pack . --namespace default \
+            --set nebariapp.enabled=false \
+            --set grafana.envFromConfigMaps=null \
+            --set grafana.envValueFrom=null \
+            --timeout 10m
 
       - name: Wait for Grafana
         run: |

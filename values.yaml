@@ -10,6 +10,7 @@ nebariapp:
   enabled: true
   # hostname: grafana.nic.local  # Required when enabled
   # keycloakHostname: ""         # Required when auth.enabled (e.g., keycloak.example.com)
+  keycloakBasePath: ""           # Set to "/auth" for legacy Keycloak (<v17)
   keycloakRealm: nebari          # Keycloak realm name
   service:
     # Grafana service (created by grafana subchart)
@@ -29,8 +30,15 @@ nebariapp:
       - profile
       - email
       - groups
-    # groups: []           # Groups to create in Keycloak (e.g., [admin, viewer])
-    # keycloakConfig:      # Advanced Keycloak client configuration
+    groups:
+      - admin
+      - viewer
+    keycloakConfig:
+      groups:
+        - name: admin
+          members:
+            - admin
+    # Override keycloakConfig.groups to customize group membership
   # landingPage controls whether and how this service appears on the Nebari
   # landing page (requires nebari-operator with LandingPageConfig support).
   landingPage:
@@ -55,19 +63,6 @@ nebariapp:
       path: "/api/health"
       intervalSeconds: 30
       timeoutSeconds: 5
-    #   groups:            # Groups with optional member assignments
-    #     - name: admin
-    #       members: [nebari-admin]
-    #     - name: viewer
-    #   protocolMappers:   # Client-level protocol mappers
-    #     - name: group-membership
-    #       protocolMapper: oidc-group-membership-mapper
-    #       config:
-    #         claim.name: groups
-    #         full.path: "false"
-    #         id.token.claim: "true"
-    #         access.token.claim: "true"
-    #         userinfo.token.claim: "true"
   # Additional services exposed through the NebariApp for push endpoints
   # additionalServices:
   #   - name: loki-push

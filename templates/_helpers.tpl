@@ -68,7 +68,9 @@ produces the correct name even when evaluated via tpl in subchart context
 
 {{/*
 Keycloak OIDC base URL for constructing auth/token/userinfo endpoints.
+Modern KeycloakX (v17+) uses "/" as the base path by default.
+Set nebariapp.keycloakBasePath to "/auth" for legacy Keycloak installations.
 */}}
 {{- define "nebari-lgtm-pack.keycloak-oidc-url" -}}
-https://{{ .Values.nebariapp.keycloakHostname }}/realms/{{ .Values.nebariapp.keycloakRealm | default "nebari" }}/protocol/openid-connect
+https://{{ .Values.nebariapp.keycloakHostname }}{{ .Values.nebariapp.keycloakBasePath }}/realms/{{ .Values.nebariapp.keycloakRealm | default "nebari" }}/protocol/openid-connect
 {{- end }}

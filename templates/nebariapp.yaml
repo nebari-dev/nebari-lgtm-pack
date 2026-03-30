@@ -33,9 +33,47 @@ spec:
     groups:
       {{- toYaml . | nindent 6 }}
     {{- end }}
-    {{- with .keycloakConfig }}
+    {{- if or .groups .keycloakConfig }}
     keycloakConfig:
-      {{- toYaml . | nindent 6 }}
+      {{- /* Build groups list: start with explicit keycloakConfig.groups, then add any from auth.groups not already defined */}}
+      {{- $kcGroups := list }}
+      {{- $definedNames := list }}
+      {{- with .keycloakConfig }}
+        {{- range .groups }}
+          {{- $kcGroups = append $kcGroups . }}
+          {{- $definedNames = append $definedNames .name }}
+        {{- end }}
+      {{- end }}
+      {{- range .groups }}
+        {{- if not (has . $definedNames) }}
+          {{- $kcGroups = append $kcGroups (dict "name" .) }}
+        {{- end }}
+      {{- end }}
+      {{- if $kcGroups }}
+      groups:
+        {{- toYaml $kcGroups | nindent 8 }}
+      {{- end }}
+      {{- /* Auto-inject group-membership protocolMapper when groups are configured */}}
+      {{- $mappers := list }}
+      {{- with .keycloakConfig }}
+        {{- with .protocolMappers }}
+          {{- $mappers = . }}
+        {{- end }}
+      {{- end }}
+      {{- if and .groups (not $mappers) }}
+      protocolMappers:
+        - name: group-membership
+          protocolMapper: oidc-group-membership-mapper
+          config:
+            claim.name: groups
+            full.path: "false"
+            id.token.claim: "true"
+            access.token.claim: "true"
+            userinfo.token.claim: "true"
+      {{- else if $mappers }}
+      protocolMappers:
+        {{- toYaml $mappers | nindent 8 }}
+      {{- end }}
     {{- end }}
   {{- end }}
   {{- with .Values.nebariapp.landingPage }}
