@@ -56,4 +56,47 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-patcher
     namespace: {{ .Values.otelCollectorOverrides.namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-overrides
+  namespace: {{ .Values.otelCollectorOverrides.namespace }}
+  labels:
+    {{- include "nebari-lgtm-pack.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+data:
+  # Deep-merged into the existing collector config's data.relay via yq.
+  # Endpoints reference .Release.Name so the chart survives renames.
+  overrides.yaml: |
+    exporters:
+      otlphttp/loki:
+        endpoint: http://{{ .Release.Name }}-loki:3100/otlp
+        tls:
+          insecure: true
+      otlp/tempo:
+        endpoint: http://{{ .Release.Name }}-tempo:4317
+        tls:
+          insecure: true
+      otlphttp/mimir:
+        endpoint: http://{{ .Release.Name }}-mimir-gateway/otlp
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlphttp/loki]
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlp/tempo]
+        metrics:
+          receivers: [otlp, prometheus]
+          processors: [memory_limiter, batch]
+          exporters: [otlphttp/mimir]
 {{- end }}
