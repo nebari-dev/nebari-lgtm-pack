@@ -72,6 +72,33 @@ All values under subchart keys pass through to the upstream charts:
 
 Set `nebariapp.enabled=true` and provide `nebariapp.hostname` to create a NebariApp CRD for routing and Keycloak OAuth integration. See `values.yaml` for full options.
 
+## OpenTelemetry collector wiring
+
+When this chart is installed on a cluster deployed by [nebari-infrastructure-core](https://github.com/nebari-dev/nebari-infrastructure-core) (NIC), a post-install Helm hook automatically rewires the OTel collector ConfigMap to ship logs/traces/metrics to this chart's Loki/Tempo/Mimir backends. No manual edits to the GitOps repo are required.
+
+**How it works**
+
+1. NIC ships an ArgoCD `Application` that deploys the upstream OTel collector with a default debug exporter. The Application has `ignoreDifferences` on the ConfigMap's `data.relay` field and `RespectIgnoreDifferences=true` in its sync options — meaning ArgoCD will not revert third-party changes to that field.
+2. This chart's `post-install,post-upgrade` hook runs a Job that:
+   - Reads the current `data.relay` from `opentelemetry-collector-opentelemetry-collector-agent` in `monitoring`.
+   - Deep-merges the LGTM exporter and pipeline overrides via `yq`.
+   - Patches the ConfigMap and stamps `nic.nebari.dev/managed-by=lgtm-pack`.
+   - Rolls the collector DaemonSet so the new config is loaded.
+
+**Disabling**
+
+Set `otelCollectorOverrides.enabled=false` if NIC is not managing the collector (e.g. standalone LGTM against a user-managed collector).
+
+**Uninstall behavior**
+
+`helm uninstall` does **not** revert the ConfigMap. The collector will keep its LGTM-wired endpoints, which will start failing once the LGTM services are gone. To reset to NIC defaults, delete the ConfigMap and let ArgoCD recreate it from Helm:
+
+```bash
+kubectl -n monitoring delete configmap opentelemetry-collector-opentelemetry-collector-agent
+```
+
+ArgoCD's next sync will render a fresh debug-exporter ConfigMap from Helm.
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
