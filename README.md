@@ -80,7 +80,7 @@ When this chart is installed on a cluster deployed by [nebari-infrastructure-cor
 
 1. NIC ships an ArgoCD `Application` that deploys the upstream OTel collector with a default debug exporter. The Application has `ignoreDifferences` on the ConfigMap's `data.relay` field and `RespectIgnoreDifferences=true` in its sync options — meaning ArgoCD will not revert third-party changes to that field.
 2. This chart's `post-install,post-upgrade` hook runs a Job that:
-   - Reads the current `data.relay` from `opentelemetry-collector-opentelemetry-collector-agent` in `monitoring`.
+   - Reads the current `data.relay` from `opentelemetry-collector-agent` in `monitoring`.
    - Deep-merges the LGTM exporter and pipeline overrides via `yq`.
    - Patches the ConfigMap and stamps `nic.nebari.dev/managed-by=lgtm-pack`.
    - Rolls the collector DaemonSet so the new config is loaded.
@@ -94,7 +94,7 @@ Set `otelCollectorOverrides.enabled=false` if NIC is not managing the collector 
 `helm uninstall` does **not** revert the ConfigMap. The collector will keep its LGTM-wired endpoints, which will start failing once the LGTM services are gone. To reset to NIC defaults, delete the ConfigMap and let ArgoCD recreate it from Helm:
 
 ```bash
-kubectl -n monitoring delete configmap opentelemetry-collector-opentelemetry-collector-agent
+kubectl -n monitoring delete configmap opentelemetry-collector-agent
 ```
 
 ArgoCD's next sync will render a fresh debug-exporter ConfigMap from Helm.
