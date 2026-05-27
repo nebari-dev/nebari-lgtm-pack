@@ -1,0 +1,59 @@
+{{- if .Values.otelCollectorOverrides.enabled }}
+# Post-install/upgrade hook that overwrites NIC's OTel collector ConfigMap with
+# this chart's exporter wiring (Loki/Tempo/Mimir) and rolls the DaemonSet so
+# the collector picks up the new config. NIC's ArgoCD Application has
+# RespectIgnoreDifferences=true on data.relay, so the override persists.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-patcher
+  namespace: {{ .Values.otelCollectorOverrides.namespace }}
+  labels:
+    {{- include "nebari-lgtm-pack.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-patcher
+  namespace: {{ .Values.otelCollectorOverrides.namespace }}
+  labels:
+    {{- include "nebari-lgtm-pack.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["{{ .Values.otelCollectorOverrides.configMapName }}"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    resourceNames: ["{{ .Values.otelCollectorOverrides.daemonSetName }}"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-patcher
+  namespace: {{ .Values.otelCollectorOverrides.namespace }}
+  labels:
+    {{- include "nebari-lgtm-pack.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-patcher
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-patcher
+    namespace: {{ .Values.otelCollectorOverrides.namespace }}
+{{- end }}
