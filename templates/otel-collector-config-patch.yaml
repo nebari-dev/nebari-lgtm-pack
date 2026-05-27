@@ -136,7 +136,7 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              set -eu
+              set -euo pipefail
               NS={{ .Values.otelCollectorOverrides.namespace | quote }}
               CM={{ .Values.otelCollectorOverrides.configMapName | quote }}
               DS={{ .Values.otelCollectorOverrides.daemonSetName | quote }}

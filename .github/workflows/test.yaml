@@ -116,6 +116,17 @@ jobs:
           grep -q 'memory_limiter:' /tmp/relay.yaml
           grep -q 'prometheus:' /tmp/relay.yaml
 
+          # Pipelines must REPLACE (not concatenate) — no debug exporter
+          # should remain in any pipeline after merge. Parse with yq instead
+          # of grep so we check the actual list, not a substring anywhere.
+          for pipeline in logs traces metrics; do
+            if yq -e ".service.pipelines.${pipeline}.exporters | contains([\"debug\"])" /tmp/relay.yaml >/dev/null 2>&1; then
+              echo "FAIL: pipeline ${pipeline} still has debug exporter after merge"
+              yq ".service.pipelines.${pipeline}" /tmp/relay.yaml
+              exit 1
+            fi
+          done
+
       - name: Dump patch Job logs on failure
         if: failure()
         run: |

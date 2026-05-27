@@ -366,7 +366,10 @@ otelCollectorOverrides:
   namespace: monitoring
   configMapName: opentelemetry-collector-opentelemetry-collector-agent
   daemonSetName: opentelemetry-collector-opentelemetry-collector-agent
-  # Image bundling kubectl + yq + jq for the patch Job.
+  # Image for the patch Job — needs kubectl + yq + jq in a single binary
+  # so the script stays a small inline shell snippet. alpine/k8s bundles
+  # all three; it's an unofficial community image, so override here if
+  # your org requires a vetted registry.
   image: alpine/k8s:1.30.4
   # Optional pull policy override.
   imagePullPolicy: IfNotPresent
