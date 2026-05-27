@@ -364,8 +364,13 @@ otelCollectorOverrides:
   # match what NIC's OTel collector ArgoCD Application produces with chart
   # release name "opentelemetry-collector" in daemonset mode.
   namespace: monitoring
-  configMapName: opentelemetry-collector-opentelemetry-collector-agent
-  daemonSetName: opentelemetry-collector-opentelemetry-collector-agent
+  # Names match what NIC's OTel collector chart renders with release name
+  # "opentelemetry-collector": the chart's fullname helper collapses when
+  # release name contains the chart name, so the suffix is just "-agent"
+  # rather than the double-prefixed "-opentelemetry-collector-agent".
+  # Override these if your NIC deployment uses a different release name.
+  configMapName: opentelemetry-collector-agent
+  daemonSetName: opentelemetry-collector-agent
   # Image for the patch Job — needs kubectl + yq + jq in a single binary
   # so the script stays a small inline shell snippet. alpine/k8s bundles
   # all three; it's an unofficial community image, so override here if

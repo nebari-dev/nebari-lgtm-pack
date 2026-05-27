@@ -38,7 +38,7 @@ jobs:
           apiVersion: v1
           kind: ConfigMap
           metadata:
-            name: opentelemetry-collector-opentelemetry-collector-agent
+            name: opentelemetry-collector-agent
             namespace: monitoring
           data:
             relay: |
@@ -67,7 +67,7 @@ jobs:
           apiVersion: apps/v1
           kind: DaemonSet
           metadata:
-            name: opentelemetry-collector-opentelemetry-collector-agent
+            name: opentelemetry-collector-agent
             namespace: monitoring
           spec:
             selector:
@@ -82,7 +82,7 @@ jobs:
                   - name: pause
                     image: registry.k8s.io/pause:3.9
           EOF
-          kubectl -n monitoring rollout status daemonset/opentelemetry-collector-opentelemetry-collector-agent --timeout=2m
+          kubectl -n monitoring rollout status daemonset/opentelemetry-collector-agent --timeout=2m
 
       - name: Deploy chart
         run: |
@@ -97,13 +97,13 @@ jobs:
         run: |
           set -e
           echo "=== ConfigMap annotations ==="
-          kubectl -n monitoring get cm opentelemetry-collector-opentelemetry-collector-agent \
+          kubectl -n monitoring get cm opentelemetry-collector-agent \
             -o jsonpath='{.metadata.annotations}' | tee /tmp/annotations.json
           echo
           grep -q '"nic.nebari.dev/managed-by":"lgtm-pack"' /tmp/annotations.json
 
           echo "=== Merged data.relay ==="
-          kubectl -n monitoring get cm opentelemetry-collector-opentelemetry-collector-agent \
+          kubectl -n monitoring get cm opentelemetry-collector-agent \
             -o jsonpath='{.data.relay}' | tee /tmp/relay.yaml
           echo
 
