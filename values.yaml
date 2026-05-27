@@ -345,3 +345,28 @@ prometheus-node-exporter:
   podAnnotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "9100"
+
+# =============================================================================
+# OpenTelemetry Collector overrides
+# =============================================================================
+# When enabled (default), a post-install/post-upgrade Helm hook patches the
+# OTel collector ConfigMap deployed by nebari-infrastructure-core (NIC) so that
+# logs/traces/metrics flow to this chart's Loki/Tempo/Mimir backends. The hook
+# reads the current ConfigMap, deep-merges the override config, and rolls the
+# collector DaemonSet. NIC's ArgoCD Application is configured with
+# RespectIgnoreDifferences=true so the override survives subsequent syncs.
+#
+# Set enabled=false in environments where NIC is not deploying the collector
+# (e.g. standalone LGTM installs against a user-managed collector).
+otelCollectorOverrides:
+  enabled: true
+  # Namespace, ConfigMap, and DaemonSet names targeted by the hook. Defaults
+  # match what NIC's OTel collector ArgoCD Application produces with chart
+  # release name "opentelemetry-collector" in daemonset mode.
+  namespace: monitoring
+  configMapName: opentelemetry-collector-opentelemetry-collector-agent
+  daemonSetName: opentelemetry-collector-opentelemetry-collector-agent
+  # Image bundling kubectl + yq + jq for the patch Job.
+  image: alpine/k8s:1.30.4
+  # Optional pull policy override.
+  imagePullPolicy: IfNotPresent
