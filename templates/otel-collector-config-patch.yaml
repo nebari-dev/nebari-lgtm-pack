@@ -99,4 +99,76 @@ data:
           receivers: [otlp, prometheus]
           processors: [memory_limiter, batch]
           exporters: [otlphttp/mimir]
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-patch
+  namespace: {{ .Values.otelCollectorOverrides.namespace }}
+  labels:
+    {{- include "nebari-lgtm-pack.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "2"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "nebari-lgtm-pack.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: otel-patcher
+    spec:
+      serviceAccountName: {{ include "nebari-lgtm-pack.fullname" . }}-otel-patcher
+      restartPolicy: OnFailure
+      containers:
+        - name: patch
+          image: {{ .Values.otelCollectorOverrides.image | quote }}
+          imagePullPolicy: {{ .Values.otelCollectorOverrides.imagePullPolicy | default "IfNotPresent" }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              NS={{ .Values.otelCollectorOverrides.namespace | quote }}
+              CM={{ .Values.otelCollectorOverrides.configMapName | quote }}
+              DS={{ .Values.otelCollectorOverrides.daemonSetName | quote }}
+
+              echo "Waiting up to 5m for ConfigMap $CM in $NS..."
+              for i in $(seq 1 60); do
+                if kubectl -n "$NS" get cm "$CM" >/dev/null 2>&1; then
+                  echo "ConfigMap found."
+                  break
+                fi
+                sleep 5
+              done
+              kubectl -n "$NS" get cm "$CM" >/dev/null
+
+              echo "Reading current data.relay..."
+              CURRENT=$(kubectl -n "$NS" get cm "$CM" -o jsonpath='{.data.relay}')
+              if [ -z "$CURRENT" ]; then
+                echo "ERROR: data.relay is empty; refusing to overwrite blindly." >&2
+                exit 1
+              fi
+
+              echo "Deep-merging overrides..."
+              MERGED=$(printf '%s\n' "$CURRENT" | yq -P '. *= load("/overrides/overrides.yaml")' -)
+
+              echo "Patching ConfigMap..."
+              PATCH=$(jq -n --arg relay "$MERGED" \
+                '{metadata:{annotations:{"nic.nebari.dev/managed-by":"lgtm-pack"}},data:{relay:$relay}}')
+              kubectl -n "$NS" patch cm "$CM" --type merge --patch "$PATCH"
+
+              echo "Rolling DaemonSet $DS..."
+              kubectl -n "$NS" rollout restart daemonset/"$DS"
+              kubectl -n "$NS" rollout status daemonset/"$DS" --timeout=3m
+              echo "Done."
+          volumeMounts:
+            - name: overrides
+              mountPath: /overrides
+              readOnly: true
+      volumes:
+        - name: overrides
+          configMap:
+            name: {{ include "nebari-lgtm-pack.fullname" . }}-otel-overrides
 {{- end }}
