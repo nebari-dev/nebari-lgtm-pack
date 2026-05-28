@@ -1,13 +1,18 @@
 # OpenTelemetry Collector overrides — REFERENCE ONLY.
 #
-# The nebari-lgtm-pack chart now auto-applies the override below to the OTel
-# collector ConfigMap deployed by NIC, via a post-install/post-upgrade Helm
-# hook. You do NOT need to copy this file into your GitOps repo.
+# This chart renders the equivalent ConfigMap automatically as
+# `opentelemetry-collector-overrides` in the `monitoring` namespace. NIC's
+# OTel collector mounts that ConfigMap as an additional --config file and
+# deep-merges it with the base config at startup. You do NOT need to copy
+# this file into your GitOps repo.
 #
-# This file is kept as a reference of what gets merged into the collector
-# config. If you want to customize it, fork the chart or open an issue.
-# Endpoints in the auto-applied version use {{ .Release.Name }}-{loki,tempo,
-# mimir} rather than the hard-coded "lgtm-pack-" prefix shown here.
+# This file is kept as a standalone reference of what gets merged. The
+# top-level key here is `config:` to match the upstream OTel collector
+# Helm chart's values structure (one level above what's actually placed
+# in the ConfigMap). In the auto-applied version, this same content is the
+# value of `data.relay.yaml` in the override ConfigMap, and endpoints use
+# {{ .Release.Name }}-{loki,tempo,mimir} rather than the hard-coded
+# "lgtm-pack-" prefix shown here.
 config:
   exporters:
     otlphttp/loki:

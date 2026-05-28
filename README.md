@@ -74,30 +74,28 @@ Set `nebariapp.enabled=true` and provide `nebariapp.hostname` to create a Nebari
 
 ## OpenTelemetry collector wiring
 
-When this chart is installed on a cluster deployed by [nebari-infrastructure-core](https://github.com/nebari-dev/nebari-infrastructure-core) (NIC), a post-install Helm hook automatically rewires the OTel collector ConfigMap to ship logs/traces/metrics to this chart's Loki/Tempo/Mimir backends. No manual edits to the GitOps repo are required.
+When this chart is installed on a cluster deployed by [nebari-infrastructure-core](https://github.com/nebari-dev/nebari-infrastructure-core) (NIC), logs/traces/metrics are automatically routed to this chart's Loki/Tempo/Mimir backends. No manual edits to the GitOps repo are required.
 
 **How it works**
 
-1. NIC ships an ArgoCD `Application` that deploys the upstream OTel collector with a default debug exporter. The Application has `ignoreDifferences` on the ConfigMap's `data.relay` field and `RespectIgnoreDifferences=true` in its sync options — meaning ArgoCD will not revert third-party changes to that field.
-2. This chart's `post-install,post-upgrade` hook runs a Job that:
-   - Reads the current `data.relay` from `opentelemetry-collector-agent` in `monitoring`.
-   - Deep-merges the LGTM exporter and pipeline overrides via `yq`.
-   - Patches the ConfigMap and stamps `nic.nebari.dev/managed-by=lgtm-pack`.
-   - Rolls the collector DaemonSet so the new config is loaded.
+1. NIC's OTel collector is configured to mount an optional `opentelemetry-collector-overrides` ConfigMap and pass it to the collector as an additional `--config` file. An init container resolves the override file (or falls back to an empty `{}` if no software pack has provided one).
+2. This chart renders the `opentelemetry-collector-overrides` ConfigMap with our exporter and pipeline overrides — endpoints templated with `{{ .Release.Name }}` so custom release names work.
+3. The OTel collector deep-merges its base config (NIC's defaults) with this override at startup. Our pipeline overrides replace the `[debug]` exporter lists with `[otlphttp/loki]`, `[otlp/tempo]`, and `[otlphttp/mimir]`.
+4. A small post-install/post-upgrade Job rolls NIC's collector DaemonSet so the init container re-resolves the override file. The DaemonSet's `checksum/config` annotation is derived from Helm values, not from this external ConfigMap, so without an explicit rollout the new config would not be picked up until an unrelated pod restart.
+
+Because NIC and this chart write to separate ConfigMaps, ArgoCD never has to choose between conflicting desired states — sidestepping upstream issue [argo-cd#7478](https://github.com/argoproj/argo-cd/issues/7478) where `ignoreDifferences` is bypassed during sync.
 
 **Disabling**
 
-Set `otelCollectorOverrides.enabled=false` if NIC is not managing the collector (e.g. standalone LGTM against a user-managed collector).
+Set `otelCollectorOverrides.enabled=false` if NIC is not managing the collector (e.g. standalone LGTM against a user-managed collector). Without the override ConfigMap, NIC's collector runs with debug exporters only.
 
 **Uninstall behavior**
 
-`helm uninstall` does **not** revert the ConfigMap. The collector will keep its LGTM-wired endpoints, which will start failing once the LGTM services are gone. To reset to NIC defaults, delete the ConfigMap and let ArgoCD recreate it from Helm:
+`helm uninstall` removes the `opentelemetry-collector-overrides` ConfigMap. NIC's collector pods continue using the previously-resolved override until they restart for any reason; at that point the init container falls back to empty `{}` and the collector reverts to debug exporters. To force the revert immediately:
 
 ```bash
-kubectl -n monitoring delete configmap opentelemetry-collector-agent
+kubectl -n monitoring rollout restart daemonset opentelemetry-collector-agent
 ```
-
-ArgoCD's next sync will render a fresh debug-exporter ConfigMap from Helm.
 
 ## License
 
