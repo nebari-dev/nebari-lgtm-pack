@@ -137,7 +137,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: rollout
-          image: {{ .Values.otelCollectorOverrides.image | quote }}
+          image: {{ .Values.otelCollectorOverrides.rolloutImage | quote }}
           imagePullPolicy: {{ .Values.otelCollectorOverrides.imagePullPolicy | default "IfNotPresent" }}
           command: ["/bin/sh", "-c"]
           args:

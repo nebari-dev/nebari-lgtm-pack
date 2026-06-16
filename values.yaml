@@ -376,6 +376,6 @@ otelCollectorOverrides:
   # Image for the rollout Job — needs kubectl. alpine/k8s bundles it (along
   # with yq + jq, kept for symmetry with NIC's tooling). It's an unofficial
   # community image, so override here if your org requires a vetted registry.
-  image: alpine/k8s:1.30.4
+  rolloutImage: alpine/k8s:1.30.4
   # Optional pull policy override.
   imagePullPolicy: IfNotPresent
