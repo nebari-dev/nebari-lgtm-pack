@@ -46,6 +46,16 @@ helm install lgtm-pack . --namespace default --set nebariapp.enabled=false
 
 Grafana will be available at port 80 of the `lgtm-pack-grafana` service (default credentials: `admin`/`admin`).
 
+### Deploy as an ArgoCD Application
+
+On a GitOps-managed Nebari cluster, deploy the pack by applying an ArgoCD `Application` that sources the chart from this repo's Helm registry. A complete, ready-to-edit manifest lives at [`examples/argocd-application.yaml`](examples/argocd-application.yaml):
+
+```bash
+kubectl apply -f examples/argocd-application.yaml
+```
+
+Set `nebariapp.hostname` and `nebariapp.keycloakHostname` to your cluster's values before applying. The example pins `targetRevision` to a published chart version and opts the `monitoring` namespace into Nebari management (`nebari.dev/managed: "true"`) so the nebari-operator reconciles the bundled `NebariApp`.
+
 ### Local Development
 
 Prerequisites: Docker, [ctlptl](https://github.com/tilt-dev/ctlptl), [Tilt](https://docs.tilt.dev/install.html)
