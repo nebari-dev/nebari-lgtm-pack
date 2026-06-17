@@ -108,6 +108,25 @@ grafana:
       enabled: true
     dashboards:
       enabled: true
+      # Dashboard extension point. The sidecar watches every namespace for
+      # ConfigMaps (or Secrets) labeled `grafana_dashboard` and live-loads the
+      # JSON into Grafana — so any Nebari software pack can ship a dashboard
+      # from its own namespace and have it auto-provisioned alongside this
+      # pack's, without touching this chart. This is the dashboard analog of
+      # the OpenTelemetry collector override ConfigMap.
+      #
+      # Contract for a contributing pack:
+      #   kind: ConfigMap
+      #   metadata:
+      #     labels: { grafana_dashboard: "1" }      # discovery key
+      #     annotations: { grafana_folder: "<Folder>" }  # optional grouping
+      #   data: { my-dashboard.json: "<grafana dashboard model>" }
+      #
+      # ALL is required for cross-namespace contribution; the grafana subchart
+      # grants the sidecar cluster-wide ConfigMap list/watch via a ClusterRole.
+      # Set back to the release namespace if you only want this pack's own
+      # dashboards.
+      searchNamespace: ALL
 
   dashboardProviders:
     dashboardproviders.yaml:
