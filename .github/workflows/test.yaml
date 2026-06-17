@@ -28,13 +28,95 @@ jobs:
       - name: Update Helm dependencies
         run: helm dependency update
 
+      - name: Stage stub OTel DaemonSet (mimics NIC's collector in the cluster)
+        run: |
+          set -e
+          kubectl create namespace monitoring
+          # Stub DaemonSet so the post-install Job's `rollout restart` and
+          # `rollout status` have something to act on. Uses pause image (tiny,
+          # always available). We do NOT stub NIC's ConfigMap anymore — this
+          # chart no longer touches it; it just renders its own override CM.
+          cat <<'EOF' | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: DaemonSet
+          metadata:
+            name: opentelemetry-collector-agent
+            namespace: monitoring
+          spec:
+            selector:
+              matchLabels:
+                app: stub-otel
+            template:
+              metadata:
+                labels:
+                  app: stub-otel
+              spec:
+                containers:
+                  - name: pause
+                    image: registry.k8s.io/pause:3.9
+          EOF
+          kubectl -n monitoring rollout status daemonset/opentelemetry-collector-agent --timeout=2m
+
       - name: Deploy chart
         run: |
           helm install lgtm-pack . --namespace default \
             --set nebariapp.enabled=false \
             --set grafana.envFromConfigMaps=null \
             --set grafana.envValueFrom=null \
+            --set otelCollectorOverrides.enabled=true \
             --timeout 10m
+
+      - name: Verify override ConfigMap rendered with correct content
+        run: |
+          set -e
+          echo "=== Override ConfigMap ==="
+          kubectl -n monitoring get cm opentelemetry-collector-overrides \
+            -o jsonpath='{.data.relay\.yaml}' | tee /tmp/overrides.yaml
+          echo
+
+          # All three exporter endpoints present, derived from release name "lgtm-pack"
+          grep -q 'http://lgtm-pack-loki:3100/otlp' /tmp/overrides.yaml
+          grep -q 'http://lgtm-pack-tempo:4317' /tmp/overrides.yaml
+          grep -q 'http://lgtm-pack-mimir-gateway/otlp' /tmp/overrides.yaml
+
+          # Each pipeline routes ONLY to its respective backend exporter
+          # (no debug). Parse with yq so we check the actual list contents.
+          for pipeline_pair in "logs:otlphttp/loki" "traces:otlp/tempo" "metrics:otlphttp/mimir"; do
+            pipeline="${pipeline_pair%:*}"
+            expected="${pipeline_pair#*:}"
+            actual=$(yq ".service.pipelines.${pipeline}.exporters | join(\",\")" /tmp/overrides.yaml)
+            if [ "$actual" != "$expected" ]; then
+              echo "FAIL: pipeline ${pipeline} exporters = [${actual}], expected [${expected}]"
+              exit 1
+            fi
+          done
+          echo "All pipelines correctly route to LGTM exporters."
+
+      - name: Verify rollout Job ran successfully
+        run: |
+          set -e
+          # The post-install Job rolls the stub DaemonSet. With pause as the
+          # container, rollout completes immediately. We just confirm the Job
+          # reached completion (it's cleaned up by hook-succeeded, so check
+          # the DaemonSet's revision history instead).
+          revision=$(kubectl -n monitoring get daemonset opentelemetry-collector-agent \
+            -o jsonpath='{.metadata.annotations.deprecated\.daemonset\.template\.generation}')
+          if [ "${revision:-1}" = "1" ]; then
+            echo "FAIL: DaemonSet was not rolled by the post-install Job"
+            kubectl -n monitoring get daemonset opentelemetry-collector-agent -o yaml | head -40
+            exit 1
+          fi
+          echo "DaemonSet generation is ${revision} — rollout completed."
+
+      - name: Dump rollout Job logs on failure
+        if: failure()
+        run: |
+          echo "=== Rollout Job pods ==="
+          kubectl -n monitoring get pods -l app.kubernetes.io/component=otel-rollout
+          echo "=== Rollout Job logs ==="
+          kubectl -n monitoring logs -l app.kubernetes.io/component=otel-rollout --tail=200 || true
+          echo "=== Override CM (if rendered) ==="
+          kubectl -n monitoring get cm opentelemetry-collector-overrides -o yaml || true
 
       - name: Wait for Grafana
         run: |

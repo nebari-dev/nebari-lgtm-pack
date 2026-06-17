@@ -108,6 +108,34 @@ grafana:
       enabled: true
     dashboards:
       enabled: true
+      # Dashboard extension point. The sidecar watches every namespace for
+      # ConfigMaps (or Secrets) labeled `grafana_dashboard` and live-loads the
+      # JSON into Grafana — so any Nebari software pack can ship a dashboard
+      # from its own namespace and have it auto-provisioned alongside this
+      # pack's, without touching this chart. This is the dashboard analog of
+      # the OpenTelemetry collector override ConfigMap.
+      #
+      # Contract for a contributing pack:
+      #   kind: ConfigMap
+      #   metadata:
+      #     labels: { grafana_dashboard: "1" }      # discovery key
+      #     annotations: { grafana_folder: "<Folder>" }  # optional grouping
+      #   data: { my-dashboard.json: "<grafana dashboard model>" }
+      #
+      # ALL is required for cross-namespace contribution; the grafana subchart
+      # grants the sidecar cluster-wide ConfigMap list/watch via a ClusterRole.
+      # Set back to the release namespace if you only want this pack's own
+      # dashboards.
+      searchNamespace: ALL
+      # Honor the `grafana_folder` ConfigMap annotation so dashboards land in a
+      # named Grafana folder instead of General. Without folderAnnotation +
+      # foldersFromFilesStructure the sidecar ignores the annotation and every
+      # dashboard falls into the General folder. This is what places this
+      # pack's dashboards under "Nebari" (and lets contributing packs choose
+      # their own folder via the annotation).
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
 
   dashboardProviders:
     dashboardproviders.yaml:
@@ -345,3 +373,37 @@ prometheus-node-exporter:
   podAnnotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "9100"
+
+# =============================================================================
+# OpenTelemetry Collector overrides
+# =============================================================================
+# When enabled (default), this chart renders a ConfigMap named
+# "opentelemetry-collector-overrides" that NIC's OTel collector picks up via
+# an optional volume mount and an extra --config flag. The collector
+# deep-merges this override config with NIC's base config at startup, routing
+# logs/traces/metrics to this chart's Loki/Tempo/Mimir backends.
+#
+# The hook also rolls NIC's collector DaemonSet so the init container
+# re-resolves the override file. NIC and this chart never write to the same
+# Kubernetes resource — earlier attempts to in-place patch NIC's ConfigMap
+# hit upstream ArgoCD bug argoproj/argo-cd#7478 (apply step writes the full
+# rendered resource on every sync regardless of ignoreDifferences).
+#
+# Set enabled=false in environments where NIC is not deploying the collector
+# (e.g. standalone LGTM installs against a user-managed collector).
+otelCollectorOverrides:
+  enabled: true
+  # Namespace where NIC's collector DaemonSet lives. The override ConfigMap
+  # is rendered here too so it's in the same namespace as the volume mount.
+  namespace: monitoring
+  # DaemonSet name rolled after install/upgrade. Default matches what NIC's
+  # OTel collector chart renders with release name "opentelemetry-collector"
+  # in daemonset mode (the chart's fullname helper collapses when release
+  # name contains the chart name, giving just "<release>-agent").
+  daemonSetName: opentelemetry-collector-agent
+  # Image for the rollout Job — needs kubectl. alpine/k8s bundles it (along
+  # with yq + jq, kept for symmetry with NIC's tooling). It's an unofficial
+  # community image, so override here if your org requires a vetted registry.
+  rolloutImage: alpine/k8s:1.30.4
+  # Optional pull policy override.
+  imagePullPolicy: IfNotPresent

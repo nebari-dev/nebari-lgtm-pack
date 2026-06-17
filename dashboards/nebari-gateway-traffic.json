@@ -165,8 +165,8 @@
       ]
     },
     {
-      "title": "Certificate Expiry",
-      "type": "table",
+      "title": "Certificate Expiry (Days Remaining)",
+      "type": "bargauge",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
       "datasource": { "uid": "mimir", "type": "prometheus" },
       "fieldConfig": {
@@ -174,41 +174,25 @@
           "thresholds": {
             "steps": [
               { "color": "red", "value": null },
-              { "color": "orange", "value": 604800 },
-              { "color": "green", "value": 2592000 }
+              { "color": "orange", "value": 7 },
+              { "color": "green", "value": 30 }
             ]
           },
-          "custom": {
-            "displayMode": "color-background"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "Time" },
-            "properties": [{ "id": "custom.hidden", "value": true }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Value" },
-            "properties": [{ "id": "unit", "value": "dtdurations" }]
-          }
-        ]
+          "unit": "d",
+          "min": 0
+        }
       },
       "options": {
-        "showHeader": true
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
       },
-      "transformations": [
-        {
-          "id": "reduce",
-          "options": { "reducers": ["lastNotNull"] }
-        }
-      ],
       "targets": [
         {
-          "expr": "(certmanager_certificate_expiration_timestamp_seconds - time())",
+          "expr": "(certmanager_certificate_expiration_timestamp_seconds - time()) / 86400",
           "legendFormat": "{{name}} ({{namespace}})",
-          "refId": "A",
-          "format": "table",
-          "instant": true
+          "refId": "A"
         }
       ]
     }

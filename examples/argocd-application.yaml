@@ -14,7 +14,7 @@ spec:
   source:
     chart: nebari-lgtm-pack
     repoURL: https://nebari-dev.github.io/nebari-lgtm-pack/
-    targetRevision: 0.1.0-alpha.6
+    targetRevision: 0.1.1
     helm:
       releaseName: lgtm-pack
       values: |
