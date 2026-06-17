@@ -127,6 +127,15 @@ grafana:
       # Set back to the release namespace if you only want this pack's own
       # dashboards.
       searchNamespace: ALL
+      # Honor the `grafana_folder` ConfigMap annotation so dashboards land in a
+      # named Grafana folder instead of General. Without folderAnnotation +
+      # foldersFromFilesStructure the sidecar ignores the annotation and every
+      # dashboard falls into the General folder. This is what places this
+      # pack's dashboards under "Nebari" (and lets contributing packs choose
+      # their own folder via the annotation).
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
 
   dashboardProviders:
     dashboardproviders.yaml:

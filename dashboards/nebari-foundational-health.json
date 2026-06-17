@@ -121,38 +121,6 @@
           "instant": true
         }
       ]
-    },
-    {
-      "title": "Certificate Expiry (Days Remaining)",
-      "type": "bargauge",
-      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 10 },
-      "datasource": { "uid": "mimir", "type": "prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "orange", "value": 7 },
-              { "color": "green", "value": 30 }
-            ]
-          },
-          "unit": "d",
-          "min": 0
-        }
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showUnfilled": true
-      },
-      "targets": [
-        {
-          "expr": "(certmanager_certificate_expiration_timestamp_seconds - time()) / 86400",
-          "legendFormat": "{{name}} ({{namespace}})",
-          "refId": "A"
-        }
-      ]
     }
   ],
   "schemaVersion": 39,
