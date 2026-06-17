@@ -97,6 +97,71 @@ Set `otelCollectorOverrides.enabled=false` if NIC is not managing the collector 
 kubectl -n monitoring rollout restart daemonset opentelemetry-collector-agent
 ```
 
+## Contributing dashboards from other software packs
+
+Any Nebari software pack can ship a Grafana dashboard that is auto-provisioned alongside this pack's — the dashboard analog of the OpenTelemetry collector override above. No edits to this chart are required.
+
+**How it works**
+
+Grafana's dashboard sidecar runs with `grafana.sidecar.dashboards.searchNamespace=ALL` (the default in this chart). It watches **every** namespace for ConfigMaps (or Secrets) labeled `grafana_dashboard` and live-loads the JSON they contain into Grafana within ~30s — no Grafana restart. The grafana subchart grants the sidecar cluster-wide ConfigMap list/watch via a ClusterRole when `searchNamespace=ALL`.
+
+**Contract**
+
+Your pack renders a ConfigMap, in its own namespace, that looks like this:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-pack-dashboards
+  namespace: my-pack            # your pack's namespace, not monitoring
+  labels:
+    grafana_dashboard: "1"      # discovery key the sidecar matches on
+  annotations:
+    grafana_folder: "My Pack"   # optional: groups the dashboard into a folder
+data:
+  my-dashboard.json: |          # key must end in .json
+    { ...grafana dashboard model... }
+```
+
+In a Helm chart, render every JSON file under a `dashboards/` directory so adding a dashboard is just dropping in a file:
+
+```yaml
+# templates/grafana-dashboard.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "my-pack.fullname" . }}-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: "My Pack"
+data:
+{{- range $path, $bytes := .Files.Glob "dashboards/*.json" }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+```
+
+**Point panels at the existing datasources**
+
+The sidecar only loads dashboards; it does not create datasources. Reference the datasources this pack already provisions, by `uid`:
+
+```json
+"datasource": { "type": "prometheus", "uid": "mimir" }
+```
+
+Available uids: `mimir` (metrics), `loki` (logs), `tempo` (traces). A panel pointing at a uid that does not exist renders empty.
+
+**Soft dependency**
+
+This is a soft dependency on the LGTM pack: if this pack (and therefore Grafana) is not installed, the contributing pack's ConfigMap simply sits unused — no error, no coupling — exactly like the OTel override ConfigMap when no collector is present.
+
+**Restricting discovery**
+
+To stop watching other namespaces, set `grafana.sidecar.dashboards.searchNamespace` to the release namespace (or a comma-separated list). Only this pack's own dashboards are then provisioned.
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
