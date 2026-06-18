@@ -1,0 +1,49 @@
+name: Sync Helm Chart to nebari-dev/helm-repository
+
+# Onboards this chart to the central Nebari Helm repository. On each published
+# GitHub release (cut by release.yaml when chart/Chart.yaml changes on main),
+# this opens a PR against nebari-dev/helm-repository copying chart/ into
+# charts/nebari-lgtm-pack/. When that PR merges, helm-repository packages,
+# indexes (with `helm repo index --merge`, preserving prior versions), and
+# publishes the chart + index to https://nebari-dev.github.io/helm-repository/.
+#
+# Prerequisite (one-time, by a helm-repository maintainer): the bot token must
+# exist as the org/repo secret NEBARI_HELM_REPO_TOKEN. See
+# https://github.com/nebari-dev/helm-repository/blob/main/.github/actions/sync-chart/README.md
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Skip PR creation and just lint the chart"
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  sync:
+    name: Sync chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout calling repository
+        uses: actions/checkout@v4
+
+      - name: Sync chart to helm-repository
+        if: github.event.inputs.dry-run != 'true'
+        uses: nebari-dev/helm-repository/.github/actions/sync-chart@main
+        with:
+          chart-path: chart
+          token: ${{ secrets.NEBARI_HELM_REPO_TOKEN }}
+          pr-labels: 'automated,helm-sync'
+
+      - name: Install Helm (dry-run)
+        if: github.event.inputs.dry-run == 'true'
+        uses: azure/setup-helm@v4
+
+      - name: Lint chart (dry-run)
+        if: github.event.inputs.dry-run == 'true'
+        run: helm lint chart

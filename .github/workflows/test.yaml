@@ -26,7 +26,7 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
       - name: Update Helm dependencies
-        run: helm dependency update
+        run: helm dependency update chart
 
       - name: Stage stub OTel DaemonSet (mimics NIC's collector in the cluster)
         run: |
@@ -59,7 +59,7 @@ jobs:
 
       - name: Deploy chart
         run: |
-          helm install lgtm-pack . --namespace default \
+          helm install lgtm-pack chart --namespace default \
             --set nebariapp.enabled=false \
             --set grafana.envFromConfigMaps=null \
             --set grafana.envValueFrom=null \

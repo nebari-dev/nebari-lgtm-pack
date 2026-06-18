@@ -39,16 +39,26 @@ Push endpoints (for external ingest):
 
 ### Install
 
+The chart source lives in [`chart/`](chart/). From a clone:
+
 ```bash
-helm dependency update
-helm install lgtm-pack . --namespace default --set nebariapp.enabled=false
+helm dependency update chart
+helm install lgtm-pack chart --namespace default --set nebariapp.enabled=false
+```
+
+Or from the published Nebari Helm repository (this chart is released via [nebari-dev/helm-repository](https://github.com/nebari-dev/helm-repository)):
+
+```bash
+helm repo add nebari https://raw.githubusercontent.com/nebari-dev/helm-repository/gh-pages/
+helm repo update nebari
+helm install lgtm-pack nebari/nebari-lgtm-pack --namespace default --set nebariapp.enabled=false
 ```
 
 Grafana will be available at port 80 of the `lgtm-pack-grafana` service (default credentials: `admin`/`admin`).
 
 ### Deploy as an ArgoCD Application
 
-On a GitOps-managed Nebari cluster, deploy the pack by applying an ArgoCD `Application` that sources the chart from this repo's Helm registry. A complete, ready-to-edit manifest lives at [`examples/argocd-application.yaml`](examples/argocd-application.yaml):
+On a GitOps-managed Nebari cluster, deploy the pack by applying an ArgoCD `Application` that sources the chart from the Nebari Helm repository. A complete, ready-to-edit manifest lives at [`examples/argocd-application.yaml`](examples/argocd-application.yaml):
 
 ```bash
 kubectl apply -f examples/argocd-application.yaml

@@ -18,10 +18,10 @@ jobs:
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4  # v4.3.1
 
       - name: Update dependencies
-        run: helm dependency update
+        run: helm dependency update chart
 
       - name: Lint chart
-        run: helm lint . --set nebariapp.enabled=false
+        run: helm lint chart --set nebariapp.enabled=false
 
       - name: Template chart
-        run: helm template test . --set nebariapp.enabled=false > /dev/null
+        run: helm template test chart --set nebariapp.enabled=false > /dev/null

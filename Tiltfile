@@ -16,7 +16,7 @@ allow_k8s_contexts('k3d-nebari-dev')
 # Deploy the Helm chart
 # Reference: https://docs.tilt.dev/helm.html
 k8s_yaml(helm(
-    '.',
+    'chart',
     name='lgtm-pack',
     namespace='default',
     set=[
