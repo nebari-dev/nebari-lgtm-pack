@@ -14,7 +14,7 @@ spec:
   source:
     chart: nebari-lgtm-pack
     # Published via the central Nebari Helm repository (nebari-dev/helm-repository).
-    repoURL: https://nebari-dev.github.io/helm-repository/
+    repoURL: https://raw.githubusercontent.com/nebari-dev/helm-repository/gh-pages/
     targetRevision: 0.1.3
     helm:
       releaseName: lgtm-pack
