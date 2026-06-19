@@ -74,10 +74,11 @@ jobs:
             -o jsonpath='{.data.relay\.yaml}' | tee /tmp/overrides.yaml
           echo
 
-          # All three exporter endpoints present, derived from release name "lgtm-pack"
-          grep -q 'http://lgtm-pack-loki:3100/otlp' /tmp/overrides.yaml
-          grep -q 'http://lgtm-pack-tempo:4317' /tmp/overrides.yaml
-          grep -q 'http://lgtm-pack-mimir-gateway/otlp' /tmp/overrides.yaml
+          # All three exporter endpoints present, derived from release name
+          # "lgtm-pack" and namespace "default" (helm install --namespace default)
+          grep -q 'http://lgtm-pack-loki.default.svc.cluster.local:3100/otlp' /tmp/overrides.yaml
+          grep -q 'http://lgtm-pack-tempo.default.svc.cluster.local:4317' /tmp/overrides.yaml
+          grep -q 'http://lgtm-pack-mimir-gateway.default.svc.cluster.local/otlp' /tmp/overrides.yaml
 
           # Each pipeline routes ONLY to its respective backend exporter
           # (no debug). Parse with yq so we check the actual list contents.
