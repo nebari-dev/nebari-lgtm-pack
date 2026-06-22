@@ -103,10 +103,25 @@ its port-forward.
   least one series exists. This proves the full chain
   Envoy → NIC collector → (our override) → Mimir, i.e. the
   `nebari-gateway-traffic` dashboard will render real data.
-- **`verify-traces.sh`** *(light)* — assert Tempo is Ready and its datasource
-  is healthy. Optionally push one synthetic OTLP span and read it back; if not
-  cheap/reliable, skip with a logged note (traces do not flow organically in
-  an idle cluster).
+- **`verify-traces.sh`** — push a synthetic OTLP span **through NIC's
+  collector** and read it back from Tempo, exercising the exact override
+  pipeline (`otlp` receiver → `otlp/tempo` exporter). Port-forward the
+  collector's OTLP/HTTP receiver (port 4318 on the `opentelemetry-collector`
+  service in `monitoring`), POST a minimal `/v1/traces` payload with a known
+  trace ID, then port-forward Tempo and query `/api/traces/<trace-id>` until
+  the span is found (with a bounded retry to absorb export/ingest latency).
+  Assert the trace is retrievable. Traces do not flow organically in an idle
+  cluster, so the synthetic push is what keeps this check consistent with the
+  other signals — it validates the collector → Tempo leg of the override
+  end to end, not just readiness.
+
+> Note on consistency: `verify-traces.sh` pushes synthetic OTLP through the
+> collector because traces have no organic source. `verify-logs.sh` and
+> `verify-metrics.sh` deliberately assert on *organic* data (Promtail-shipped
+> logs; Envoy metrics from real gateway traffic) because those sources exist
+> and exercising them also validates the dashboard's real-world data path. All
+> three nonetheless verify the same thing: telemetry lands in the LGTM backend
+> via NIC's collector.
 
 A top-level **`tests/e2e/run.sh`** runs the four scripts in order and is what
 the workflow invokes, so the whole suite can also be run locally against any
