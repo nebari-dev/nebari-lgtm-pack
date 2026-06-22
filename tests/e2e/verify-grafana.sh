@@ -15,7 +15,7 @@ AUTH=(-u "${GRAFANA_USER}:${GRAFANA_PASS}")
 echo "=== Grafana /api/health ==="
 # Grafana may take a moment after pod-ready to serve a healthy DB; poll.
 retry 120 "grafana database healthy" bash -c \
-  "curl -sf ${BASE}/api/health | jq -e '.database == \"ok\"'"
+  "set -o pipefail; curl -sf ${BASE}/api/health | jq -e '.database == \"ok\"'"
 
 echo "=== Datasources provisioned ==="
 DS_JSON="$(curl -sf "${AUTH[@]}" "${BASE}/api/datasources")"
@@ -32,7 +32,7 @@ echo "=== Datasource health checks ==="
 for name in Loki Tempo Mimir; do
   uid="$(echo "${DS_JSON}" | jq -r --arg n "${name}" '.[] | select(.name==$n) | .uid')"
   retry 120 "${name} datasource health" bash -c \
-    "curl -sf ${AUTH[*]} ${BASE}/api/datasources/uid/${uid}/health | jq -e '.status == \"OK\"'"
+    "set -o pipefail; curl -sf ${AUTH[*]} ${BASE}/api/datasources/uid/${uid}/health | jq -e '.status == \"OK\"'"
 done
 
 echo "OK: Grafana healthy and Loki/Tempo/Mimir datasources are working."

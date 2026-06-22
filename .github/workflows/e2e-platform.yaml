@@ -27,7 +27,7 @@ jobs:
 
       - name: Bootstrap Nebari platform (NIC latest)
         id: sandbox
-        uses: nebari-dev/action-nebari-sandbox@v2
+        uses: nebari-dev/action-nebari-sandbox@09f542cdbcb0ed74307f86fee4f8ad0053a4cd8f  # v2.0.2
         with:
           profile: platform
           # nic-version defaults to 'latest' (prebuilt binary, no Go needed).
@@ -36,7 +36,7 @@ jobs:
         run: echo "KUBECONFIG=${{ steps.sandbox.outputs.kubeconfig }}" >> "$GITHUB_ENV"
 
       - name: Install lgtm-pack via GitOps
-        uses: nebari-dev/action-nebari-sandbox/add-software-pack@v2
+        uses: nebari-dev/action-nebari-sandbox/add-software-pack@09f542cdbcb0ed74307f86fee4f8ad0053a4cd8f  # v2.0.2
         with:
           gitops-dir:           ${{ steps.sandbox.outputs.gitops-dir }}
           app-name:             nebari-lgtm-pack

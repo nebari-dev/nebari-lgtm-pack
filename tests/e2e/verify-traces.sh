@@ -20,10 +20,14 @@ pf "${MON_NS}" "${OTEL_SVC}" "${OTEL_PORT}" 4318
 OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
 
 # Minimal OTLP/HTTP trace payload. start/end are unix-nano; any recent value is
-# fine for ingest. Use `date` for a plausible window.
-NOW_NS="$(date +%s)000000000"
-START_NS="$(( $(date +%s) - 1 ))000000000"
-read -r -d '' SPAN_JSON <<JSON || true
+# fine for ingest. Timestamps are recomputed on every push (below) so they stay
+# fresh across the retry window; TRACE_ID/SPAN_ID stay static for the lookup.
+echo "=== Pushing synthetic span to collector ${OTEL_SVC}:4318 ==="
+push_span() {
+  local now_ns start_ns span_json code
+  now_ns="$(date +%s)000000000"
+  start_ns="$(( $(date +%s) - 1 ))000000000"
+  span_json="$(cat <<JSON
 {
   "resourceSpans": [{
     "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "lgtm-e2e-probe"}}]},
@@ -34,21 +38,18 @@ read -r -d '' SPAN_JSON <<JSON || true
         "spanId": "${SPAN_ID}",
         "name": "e2e-synthetic-span",
         "kind": 1,
-        "startTimeUnixNano": "${START_NS}",
-        "endTimeUnixNano": "${NOW_NS}"
+        "startTimeUnixNano": "${start_ns}",
+        "endTimeUnixNano": "${now_ns}"
       }]
     }]
   }]
 }
 JSON
-
-echo "=== Pushing synthetic span to collector ${OTEL_SVC}:4318 ==="
-push_span() {
-  local code
+)"
   code="$(curl -s -o /dev/null -w '%{http_code}' \
     -X POST "${OTEL_BASE}/v1/traces" \
     -H 'Content-Type: application/json' \
-    --data "${SPAN_JSON}")"
+    --data "${span_json}")"
   [[ "${code}" == "200" || "${code}" == "202" ]]
 }
 retry 60 "collector accepts OTLP span" push_span

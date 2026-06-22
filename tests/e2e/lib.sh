@@ -36,6 +36,10 @@ trap _cleanup EXIT
 # pf <namespace> <svc> <local_port> <remote_port>
 # Backgrounds `kubectl port-forward` and blocks until the local port accepts
 # connections (max ~20s). Records the PID for cleanup on exit.
+# NOTE: the local listener binds as soon as the forward starts, before the
+# upstream backend is necessarily serving. This readiness check is a best-effort
+# guard, NOT a guarantee the backend is ready — callers must still poll the
+# actual API via retry().
 pf() {
   local ns="$1" svc="$2" lport="$3" rport="$4"
   kubectl -n "${ns}" port-forward "svc/${svc}" "${lport}:${rport}" >/dev/null 2>&1 &

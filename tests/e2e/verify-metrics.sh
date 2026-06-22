@@ -28,8 +28,8 @@ query_has_series() {
 
 # Each entry: a human label and a PromQL probe that must return series.
 declare -a CHECKS=(
-  'cadvisor scrape up|up{job="kubernetes-cadvisor"}'
-  'kubelet scrape up|up{job="kubernetes-kubelet"}'
+  'cadvisor scrape up|up{job="kubernetes-cadvisor"} == 1'
+  'kubelet scrape up|up{job="kubernetes-kubelet"} == 1'
   'container memory (cAdvisor)|container_memory_working_set_bytes'
   'kube-state pod info|kube_pod_info'
 )
