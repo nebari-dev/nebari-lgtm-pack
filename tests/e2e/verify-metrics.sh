@@ -26,6 +26,23 @@ query_has_series() {
   echo "${resp}" | jq -e '.status == "success" and (.data.result | length) > 0' >/dev/null
 }
 
+# Ground-truth introspection: before asserting specific series, wait for ANY
+# series to land and dump the label values actually present. Mimir's OTLP
+# ingest can rewrite Prometheus labels (e.g. job/instance derived from
+# service.name/service.instance.id), so this shows exactly what the collector
+# forwarded and under which labels — invaluable when a specific probe misses.
+echo "=== Mimir introspection: what is actually ingested ==="
+if retry 180 "any series in Mimir" query_has_series 'count({__name__!=""})'; then
+  echo "--- job label values ---"
+  curl -sf -G "${BASE}/api/v1/label/job/values"          | jq -r '.data[]?' | sort -u | head -50 || true
+  echo "--- service_name label values ---"
+  curl -sf -G "${BASE}/api/v1/label/service_name/values" | jq -r '.data[]?' | sort -u | head -50 || true
+  echo "--- sample metric names ---"
+  curl -sf -G "${BASE}/api/v1/label/__name__/values"     | jq -r '.data[]?' | sort -u | head -80 || true
+else
+  echo "::warning::No series in Mimir after 180s — metrics are not reaching Mimir at all."
+fi
+
 # Each entry: a human label and a PromQL probe that must return series.
 declare -a CHECKS=(
   'cadvisor scrape up|up{job="kubernetes-cadvisor"} == 1'

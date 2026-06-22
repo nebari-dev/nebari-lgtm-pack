@@ -14,6 +14,21 @@ source "${HERE}/lib.sh"
 TRACE_ID="0af7651916cd43dd8448eb211c80319c"
 SPAN_ID="b7ad6b7169203331"
 
+# ── Discover the collector's OTLP/HTTP service ────────────────────────────────
+# In daemonset mode the collector Service name is not stable across NIC
+# versions (it may or may not carry the chart's -agent suffix), so resolve it
+# by the OTLP/HTTP port (4318) rather than hardcoding. Falls back to the
+# lib.sh default if discovery turns up nothing.
+DISCOVERED_SVC="$(kubectl -n "${MON_NS}" get svc -o json \
+  | jq -r '[.items[] | select(any(.spec.ports[]?; (.port==4318) or (.targetPort==4318))) | .metadata.name][0] // empty')"
+if [[ -n "${DISCOVERED_SVC}" ]]; then
+  OTEL_SVC="${DISCOVERED_SVC}"
+else
+  echo "::warning::no svc in ${MON_NS} advertises port 4318; falling back to ${OTEL_SVC}"
+  kubectl -n "${MON_NS}" get svc || true
+fi
+echo "Using collector OTLP/HTTP service: ${OTEL_SVC}"
+
 # ── Push to the collector's OTLP/HTTP receiver ────────────────────────────────
 OTEL_PORT=4318
 pf "${MON_NS}" "${OTEL_SVC}" "${OTEL_PORT}" 4318

@@ -58,6 +58,10 @@ jobs:
           kubectl get pods -n lgtm -o wide || true
           echo "=== Pods (monitoring) ==="
           kubectl get pods -n monitoring -o wide || true
+          echo "=== Services (monitoring) ==="
+          kubectl get svc -n monitoring -o wide || true
+          echo "=== Services (lgtm) ==="
+          kubectl get svc -n lgtm -o wide || true
           echo "=== OTel collector override CM ==="
           kubectl get cm opentelemetry-collector-overrides -n monitoring -o yaml || true
           echo "=== OTel collector logs ==="
