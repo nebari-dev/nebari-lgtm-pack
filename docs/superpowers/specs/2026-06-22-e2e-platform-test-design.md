@@ -96,13 +96,28 @@ its port-forward.
   (e.g. `{namespace="monitoring"}`) and assert non-empty results. Proves the
   bundled Promtail → Loki path works (logs flow organically; no synthetic
   injection needed).
-- **`verify-metrics.sh`** — the core integration check. Generate Envoy gateway
-  traffic by curling the gateway IP several times, wait for a scrape interval,
-  then query Mimir's Prometheus API
-  (`/prometheus/api/v1/query?query=envoy_http_downstream_rq_xx`) and assert at
-  least one series exists. This proves the full chain
-  Envoy → NIC collector → (our override) → Mimir, i.e. the
-  `nebari-gateway-traffic` dashboard will render real data.
+- **`verify-metrics.sh`** — the core integration check, and the direct answer
+  to "kubernetes dashboards showing proper information." NIC's collector
+  reliably scrapes cAdvisor, the kubelet, and `prometheus.io/scrape`-annotated
+  pods (kube-state-metrics, node-exporter — both bundled in this chart) and
+  routes them to Mimir via our override. After a scrape interval, query
+  Mimir's Prometheus API (`/prometheus/api/v1/query`) for guaranteed-present
+  kubernetes metrics and assert series exist for each:
+  - `up{job="kubernetes-cadvisor"}` and `up{job="kubernetes-kubelet"}`
+    (collector scrape jobs are alive)
+  - `container_memory_working_set_bytes` (cAdvisor → real container metrics,
+    the basis for Pods/Namespaces dashboards)
+  - `kube_pod_info` (kube-state-metrics → object metrics)
+
+  This proves the full chain kube infra → NIC collector → (our override) →
+  Mimir, i.e. any Kubernetes dashboard will render real data.
+
+  > **Envoy note:** NIC's foundational collector ships **no Envoy scrape job**,
+  > so `envoy_*` series do not flow by default and the chart's shipped
+  > `nebari-gateway-traffic` dashboard has no data on a stock platform. That is
+  > a real product gap tracked separately — this test deliberately does **not**
+  > assert on Envoy metrics, since their absence is expected, not a regression
+  > in the LGTM integration.
 - **`verify-traces.sh`** — push a synthetic OTLP span **through NIC's
   collector** and read it back from Tempo, exercising the exact override
   pipeline (`otlp` receiver → `otlp/tempo` exporter). Port-forward the
@@ -118,10 +133,10 @@ its port-forward.
 > Note on consistency: `verify-traces.sh` pushes synthetic OTLP through the
 > collector because traces have no organic source. `verify-logs.sh` and
 > `verify-metrics.sh` deliberately assert on *organic* data (Promtail-shipped
-> logs; Envoy metrics from real gateway traffic) because those sources exist
-> and exercising them also validates the dashboard's real-world data path. All
-> three nonetheless verify the same thing: telemetry lands in the LGTM backend
-> via NIC's collector.
+> logs; cAdvisor/kubelet/kube-state metrics scraped by the collector) because
+> those sources exist on any running cluster and exercising them validates the
+> real dashboard data path. All three nonetheless verify the same thing:
+> telemetry lands in the LGTM backend via NIC's collector.
 
 A top-level **`tests/e2e/run.sh`** runs the four scripts in order and is what
 the workflow invokes, so the whole suite can also be run locally against any
@@ -134,11 +149,10 @@ platform cluster.
   default to single-binary/monolithic mode. Use a generous job timeout
   (~35–40 min). If pods OOM, tune component resource requests or trim the
   stack; do not silently lower assertions.
-- **Metric scrape coverage** — if NIC's collector does not scrape Envoy by
-  default, `verify-metrics.sh` goes red. That is the correct black-box
-  outcome: it means the dashboard would have no data either. Treat a red here
-  as a real signal, not test flake — investigate the collector scrape config
-  rather than weakening the test.
+- **Scrape latency** — kube metrics appear in Mimir only after a collector
+  scrape cycle + export + Mimir ingest. `verify-metrics.sh` must poll with a
+  bounded retry (e.g. up to ~3 min) rather than query once, or it will race
+  the first scrape and report a false negative.
 
 ## Out of scope
 
