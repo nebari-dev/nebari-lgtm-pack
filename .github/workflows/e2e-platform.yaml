@@ -1,0 +1,72 @@
+name: E2E Platform Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A full platform + LGTM stack is heavy; only one run at a time per ref.
+concurrency:
+  group: e2e-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - name: Install Helm
+        run: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Vendor chart dependencies
+        run: helm dependency update chart
+
+      - name: Bootstrap Nebari platform (NIC latest)
+        id: sandbox
+        uses: nebari-dev/action-nebari-sandbox@v2
+        with:
+          profile: platform
+          # nic-version defaults to 'latest' (prebuilt binary, no Go needed).
+
+      - name: Surface KUBECONFIG for sub-action wait + verification
+        run: echo "KUBECONFIG=${{ steps.sandbox.outputs.kubeconfig }}" >> "$GITHUB_ENV"
+
+      - name: Install lgtm-pack via GitOps
+        uses: nebari-dev/action-nebari-sandbox/add-software-pack@v2
+        with:
+          gitops-dir:           ${{ steps.sandbox.outputs.gitops-dir }}
+          app-name:             nebari-lgtm-pack
+          chart-source:         ./chart
+          application-manifest: ./tests/e2e/lgtm-application.yaml
+          wait-timeout:         15m
+
+      - name: Run LGTM e2e verification suite
+        run: ./tests/e2e/run.sh
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo "=== ArgoCD applications ==="
+          kubectl get applications -n argocd || true
+          echo "=== lgtm-pack Application detail ==="
+          kubectl get application/nebari-lgtm-pack -n argocd -o yaml || true
+          echo "=== Pods (lgtm) ==="
+          kubectl get pods -n lgtm -o wide || true
+          echo "=== Pods (monitoring) ==="
+          kubectl get pods -n monitoring -o wide || true
+          echo "=== OTel collector override CM ==="
+          kubectl get cm opentelemetry-collector-overrides -n monitoring -o yaml || true
+          echo "=== OTel collector logs ==="
+          kubectl logs -n monitoring daemonset/opentelemetry-collector-agent --tail=200 || true
+          echo "=== Grafana logs ==="
+          kubectl logs -n lgtm -l app.kubernetes.io/name=grafana --tail=100 || true
+          echo "=== Events (lgtm) ==="
+          kubectl get events -n lgtm --sort-by=.lastTimestamp || true
+
+      - name: Cleanup
+        if: always()
+        run: k3d cluster delete ${{ steps.sandbox.outputs.cluster-name }} || true
