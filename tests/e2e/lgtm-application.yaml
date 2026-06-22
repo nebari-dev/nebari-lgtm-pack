@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nebari-lgtm-pack
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "file://${GITOPS_DIR}"
+    targetRevision: HEAD
+    path: nebari-lgtm-pack
+    helm:
+      releaseName: nebari-lgtm-pack
+      values: |
+        nebariapp:
+          enabled: true
+          hostname: grafana.nebari.local
+          auth:
+            enabled: true
+        otelCollectorOverrides:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lgtm
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
