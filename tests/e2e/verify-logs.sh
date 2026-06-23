@@ -1,31 +1,74 @@
 #!/usr/bin/env bash
-# Verify the bundled Promtail is shipping pod logs into Loki. The monitoring
-# namespace (OTel collector et al.) is reliably chatty, so query for any log
-# line from it within the last 15m and assert a non-empty result.
+# Verify the override's logs pipeline (otlp receiver -> otlphttp/loki) by
+# pushing a synthetic OTLP log THROUGH NIC's collector and reading it back from
+# Loki. This exercises the LGTM pack's actual contract — telemetry sent to the
+# collector reaches the LGTM backend — rather than the bundled Promtail path
+# (which ships to Loki directly and would pass even if the override were
+# broken).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tests/e2e/lib.sh
 source "${HERE}/lib.sh"
 
-LPORT=3100
-pf "${LGTM_NS}" "${LOKI_SVC}" "${LPORT}" 3100
-BASE="http://127.0.0.1:${LPORT}"
+SERVICE_NAME="lgtm-e2e-logs"
 
-# Loki labels populate only after the first push; poll until the query returns
-# at least one stream. query_range needs start/end nanosecond timestamps.
-check_logs() {
+# ── Reach the collector's OTLP/HTTP receiver (serviceless DaemonSet -> pod) ────
+POD="$(otel_pod)"
+[[ -n "${POD}" ]] || { echo "::error::no Running collector pod in ${MON_NS}"; kubectl -n "${MON_NS}" get pods || true; exit 1; }
+echo "Using collector pod: ${POD}"
+OTEL_PORT=4318
+pf "${MON_NS}" "pod/${POD}" "${OTEL_PORT}" 4318
+OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
+
+# Push a synthetic OTLP log. Re-pushable (fresh timestamp each call) so the
+# readback loop can keep nudging until Loki has ingested it.
+push_log() {
+  local now_ns code
+  now_ns="$(date +%s)000000000"
+  code="$(curl -s -o /dev/null -w '%{http_code}' \
+    -X POST "${OTEL_BASE}/v1/logs" \
+    -H 'Content-Type: application/json' \
+    --data @- <<JSON
+{
+  "resourceLogs": [{
+    "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "${SERVICE_NAME}"}}]},
+    "scopeLogs": [{
+      "scope": {"name": "lgtm-e2e"},
+      "logRecords": [{
+        "timeUnixNano": "${now_ns}",
+        "severityText": "INFO",
+        "body": {"stringValue": "lgtm-e2e log probe"}
+      }]
+    }]
+  }]
+}
+JSON
+)"
+  [[ "${code}" == "200" || "${code}" == "202" ]]
+}
+
+echo "=== Pushing synthetic OTLP log through collector ${POD}:4318 ==="
+retry 60 "collector accepts OTLP log" push_log
+
+# ── Read back from Loki ───────────────────────────────────────────────────────
+LOKI_PORT=3100
+pf "${LGTM_NS}" "svc/${LOKI_SVC}" "${LOKI_PORT}" 3100
+LOKI_BASE="http://127.0.0.1:${LOKI_PORT}"
+
+# Loki maps the OTLP resource attribute service.name -> the service_name label.
+check_log() {
+  push_log || true
   local end start resp
   end="$(date +%s)000000000"
   start="$(( $(date +%s) - 900 ))000000000"
-  resp="$(curl -sf -G "${BASE}/loki/api/v1/query_range" \
-    --data-urlencode 'query={namespace="'"${MON_NS}"'"}' \
+  resp="$(curl -sf -G "${LOKI_BASE}/loki/api/v1/query_range" \
+    --data-urlencode 'query={service_name="'"${SERVICE_NAME}"'"}' \
     --data-urlencode "start=${start}" \
     --data-urlencode "end=${end}" \
     --data-urlencode 'limit=5')" || return 1
-  # data.result must be a non-empty array.
   echo "${resp}" | jq -e '(.data.result | length) > 0' >/dev/null
 }
 
-echo "=== Querying Loki for logs from namespace=${MON_NS} ==="
-retry 180 "loki has logs" check_logs
-echo "OK: Loki is receiving logs (Promtail -> Loki path works)."
+echo "=== Querying Loki for service_name=${SERVICE_NAME} ==="
+retry 180 "loki has the synthetic log" check_log
+echo "OK: synthetic log traversed collector -> Loki (otlphttp/loki override leg works)."

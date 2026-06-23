@@ -19,7 +19,6 @@ GRAFANA_SVC="${RELEASE}-grafana"
 LOKI_SVC="${RELEASE}-loki"
 TEMPO_SVC="${RELEASE}-tempo"
 MIMIR_SVC="${RELEASE}-mimir-gateway"
-OTEL_SVC="opentelemetry-collector"
 
 GRAFANA_USER="${GRAFANA_USER:-admin}"
 GRAFANA_PASS="${GRAFANA_PASS:-admin}"
@@ -33,16 +32,19 @@ _cleanup() {
 }
 trap _cleanup EXIT
 
-# pf <namespace> <svc> <local_port> <remote_port>
+# pf <namespace> <target> <local_port> <remote_port>
 # Backgrounds `kubectl port-forward` and blocks until the local port accepts
-# connections (max ~20s). Records the PID for cleanup on exit.
+# connections (max ~20s). Records the PID for cleanup on exit. <target> is a
+# kubectl port-forward target ref, e.g. "svc/my-svc" or "pod/my-pod" — the
+# collector is a serviceless DaemonSet, so its OTLP receiver must be reached
+# via a pod target.
 # NOTE: the local listener binds as soon as the forward starts, before the
 # upstream backend is necessarily serving. This readiness check is a best-effort
 # guard, NOT a guarantee the backend is ready — callers must still poll the
 # actual API via retry().
 pf() {
-  local ns="$1" svc="$2" lport="$3" rport="$4"
-  kubectl -n "${ns}" port-forward "svc/${svc}" "${lport}:${rport}" >/dev/null 2>&1 &
+  local ns="$1" target="$2" lport="$3" rport="$4"
+  kubectl -n "${ns}" port-forward "${target}" "${lport}:${rport}" >/dev/null 2>&1 &
   local pid=$!
   _PF_PIDS+=("${pid}")
   for _ in $(seq 1 40); do
@@ -51,11 +53,22 @@ pf() {
       return 0
     fi
     # Bail early if the port-forward process already died.
-    kill -0 "${pid}" 2>/dev/null || { echo "port-forward to ${svc} died"; return 1; }
+    kill -0 "${pid}" 2>/dev/null || { echo "port-forward to ${target} died"; return 1; }
     sleep 0.5
   done
-  echo "timed out waiting for port-forward ${svc} :${lport}"
+  echo "timed out waiting for port-forward ${target} :${lport}"
   return 1
+}
+
+# otel_pod -> name of a Running NIC OpenTelemetry collector pod in MON_NS.
+# NIC deploys the collector as a DaemonSet (no Service), so callers port-forward
+# directly to a pod to reach its OTLP receiver. Matches by name prefix
+# (opentelemetry-collector*) rather than a label, since labels vary across NIC
+# versions. Echoes the pod name, or empty if none found.
+otel_pod() {
+  kubectl -n "${MON_NS}" get pods \
+    -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{"\n"}{end}' 2>/dev/null \
+    | awk '$2=="Running" && $1 ~ /^opentelemetry-collector/ {print $1; exit}'
 }
 
 # retry <timeout_seconds> <description> <command...>

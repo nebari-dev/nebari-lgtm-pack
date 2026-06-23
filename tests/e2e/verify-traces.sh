@@ -14,30 +14,20 @@ source "${HERE}/lib.sh"
 TRACE_ID="0af7651916cd43dd8448eb211c80319c"
 SPAN_ID="b7ad6b7169203331"
 
-# ── Discover the collector's OTLP/HTTP service ────────────────────────────────
-# In daemonset mode the collector Service name is not stable across NIC
-# versions (it may or may not carry the chart's -agent suffix), so resolve it
-# by the OTLP/HTTP port (4318) rather than hardcoding. Falls back to the
-# lib.sh default if discovery turns up nothing.
-DISCOVERED_SVC="$(kubectl -n "${MON_NS}" get svc -o json \
-  | jq -r '[.items[] | select(any(.spec.ports[]?; (.port==4318) or (.targetPort==4318))) | .metadata.name][0] // empty')"
-if [[ -n "${DISCOVERED_SVC}" ]]; then
-  OTEL_SVC="${DISCOVERED_SVC}"
-else
-  echo "::warning::no svc in ${MON_NS} advertises port 4318; falling back to ${OTEL_SVC}"
-  kubectl -n "${MON_NS}" get svc || true
-fi
-echo "Using collector OTLP/HTTP service: ${OTEL_SVC}"
-
-# ── Push to the collector's OTLP/HTTP receiver ────────────────────────────────
+# ── Reach the collector's OTLP/HTTP receiver (serviceless DaemonSet -> pod) ────
+# NIC deploys the collector as a DaemonSet with no Service, so port-forward to
+# a collector pod rather than a service name.
+POD="$(otel_pod)"
+[[ -n "${POD}" ]] || { echo "::error::no Running collector pod in ${MON_NS}"; kubectl -n "${MON_NS}" get pods || true; exit 1; }
+echo "Using collector pod: ${POD}"
 OTEL_PORT=4318
-pf "${MON_NS}" "${OTEL_SVC}" "${OTEL_PORT}" 4318
+pf "${MON_NS}" "pod/${POD}" "${OTEL_PORT}" 4318
 OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
 
 # Minimal OTLP/HTTP trace payload. start/end are unix-nano; any recent value is
 # fine for ingest. Timestamps are recomputed on every push (below) so they stay
 # fresh across the retry window; TRACE_ID/SPAN_ID stay static for the lookup.
-echo "=== Pushing synthetic span to collector ${OTEL_SVC}:4318 ==="
+echo "=== Pushing synthetic span to collector ${POD}:4318 ==="
 push_span() {
   local now_ns start_ns span_json code
   now_ns="$(date +%s)000000000"
@@ -71,7 +61,7 @@ retry 60 "collector accepts OTLP span" push_span
 
 # ── Read back from Tempo ──────────────────────────────────────────────────────
 TEMPO_PORT=3200
-pf "${LGTM_NS}" "${TEMPO_SVC}" "${TEMPO_PORT}" 3200
+pf "${LGTM_NS}" "svc/${TEMPO_SVC}" "${TEMPO_PORT}" 3200
 TEMPO_BASE="http://127.0.0.1:${TEMPO_PORT}"
 
 echo "=== Querying Tempo for trace ${TRACE_ID} ==="

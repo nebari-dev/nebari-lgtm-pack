@@ -8,7 +8,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 LPORT=3000
-pf "${LGTM_NS}" "${GRAFANA_SVC}" "${LPORT}" 80
+pf "${LGTM_NS}" "svc/${GRAFANA_SVC}" "${LPORT}" 80
 BASE="http://127.0.0.1:${LPORT}"
 AUTH=(-u "${GRAFANA_USER}:${GRAFANA_PASS}")
 
