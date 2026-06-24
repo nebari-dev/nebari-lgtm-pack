@@ -11,6 +11,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 SERVICE_NAME="lgtm-e2e-logs"
+# A unique body token so we can find the log by content regardless of which
+# service_name label Loki's OTLP ingestion assigns it (it may fall back to
+# unknown_service if the resource attribute isn't promoted as we expect).
+LOG_MARKER="lgtm-e2e-log-probe-marker"
 
 # ── Reach the collector's OTLP/HTTP receiver (serviceless DaemonSet -> pod) ────
 POD="$(otel_pod)"
@@ -38,7 +42,7 @@ push_log() {
       "logRecords": [{
         "timeUnixNano": "${now_ns}",
         "severityText": "INFO",
-        "body": {"stringValue": "lgtm-e2e log probe"}
+        "body": {"stringValue": "${LOG_MARKER}"}
       }]
     }]
   }]
@@ -56,7 +60,8 @@ LOKI_PORT=3100
 pf "${LGTM_NS}" "svc/${LOKI_SVC}" "${LOKI_PORT}" 3100
 LOKI_BASE="http://127.0.0.1:${LOKI_PORT}"
 
-# Loki maps the OTLP resource attribute service.name -> the service_name label.
+# Find the log by its unique body content across all OTLP-labeled streams, so a
+# surprise service_name label doesn't cause a false negative.
 # shellcheck disable=SC2329  # invoked indirectly via retry "$@"
 check_log() {
   push_log || true
@@ -64,14 +69,14 @@ check_log() {
   end="$(date +%s)000000000"
   start="$(( $(date +%s) - 900 ))000000000"
   resp="$(curl -sf -G "${LOKI_BASE}/loki/api/v1/query_range" \
-    --data-urlencode 'query={service_name="'"${SERVICE_NAME}"'"}' \
+    --data-urlencode 'query={service_name=~".+"} |= "'"${LOG_MARKER}"'"' \
     --data-urlencode "start=${start}" \
     --data-urlencode "end=${end}" \
     --data-urlencode 'limit=5')" || return 1
   echo "${resp}" | jq -e '(.data.result | length) > 0' >/dev/null
 }
 
-echo "=== Querying Loki for service_name=${SERVICE_NAME} ==="
+echo "=== Querying Loki for the synthetic log (content: ${LOG_MARKER}) ==="
 if retry 180 "loki has the synthetic log" check_log; then
   echo "OK: synthetic log traversed collector -> Loki (otlphttp/loki override leg works)."
   exit 0
