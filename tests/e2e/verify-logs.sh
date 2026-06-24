@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Verify the override's logs pipeline (otlp receiver -> otlphttp/loki) by
+# pushing a synthetic OTLP log THROUGH NIC's collector and reading it back from
+# Loki. This exercises the LGTM pack's actual contract — telemetry sent to the
+# collector reaches the LGTM backend — rather than the bundled Promtail path
+# (which ships to Loki directly and would pass even if the override were
+# broken).
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tests/e2e/lib.sh
+source "${HERE}/lib.sh"
+
+SERVICE_NAME="lgtm-e2e-logs"
+# A unique body token so we can find the log by content regardless of which
+# service_name label Loki's OTLP ingestion assigns it (it may fall back to
+# unknown_service if the resource attribute isn't promoted as we expect).
+LOG_MARKER="lgtm-e2e-log-probe-marker"
+
+# ── Reach the collector's OTLP/HTTP receiver (serviceless DaemonSet -> pod) ────
+# ensure_otel_pf (called inside push) re-resolves the collector pod and
+# re-forwards if it's replaced mid-check, so a rollout doesn't wedge the push.
+OTEL_PORT=4318
+OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
+
+# Push a synthetic OTLP log. Re-pushable (fresh timestamp each call) so the
+# readback loop can keep nudging until Loki has ingested it.
+# shellcheck disable=SC2329  # invoked indirectly via retry "$@"
+push_log() {
+  local now_ns code
+  ensure_otel_pf "${OTEL_PORT}" || return 1
+  now_ns="$(date +%s)000000000"
+  code="$(curl -s -o /dev/null -w '%{http_code}' \
+    -X POST "${OTEL_BASE}/v1/logs" \
+    -H 'Content-Type: application/json' \
+    --data @- <<JSON
+{
+  "resourceLogs": [{
+    "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "${SERVICE_NAME}"}}]},
+    "scopeLogs": [{
+      "scope": {"name": "lgtm-e2e"},
+      "logRecords": [{
+        "timeUnixNano": "${now_ns}",
+        "severityText": "INFO",
+        "body": {"stringValue": "${LOG_MARKER}"}
+      }]
+    }]
+  }]
+}
+JSON
+)"
+  [[ "${code}" == "200" || "${code}" == "202" ]]
+}
+
+echo "=== Pushing synthetic OTLP log through the collector ==="
+retry 60 "collector accepts OTLP log" push_log
+
+# ── Read back from Loki ───────────────────────────────────────────────────────
+LOKI_PORT=3100
+pf "${LGTM_NS}" "svc/${LOKI_SVC}" "${LOKI_PORT}" 3100
+LOKI_BASE="http://127.0.0.1:${LOKI_PORT}"
+
+# Find the log by its unique body content across all OTLP-labeled streams, so a
+# surprise service_name label doesn't cause a false negative.
+# shellcheck disable=SC2329  # invoked indirectly via retry "$@"
+check_log() {
+  push_log || true
+  local end start resp
+  end="$(date +%s)000000000"
+  start="$(( $(date +%s) - 900 ))000000000"
+  resp="$(curl -sf -G "${LOKI_BASE}/loki/api/v1/query_range" \
+    --data-urlencode 'query={service_name=~".+"} |= "'"${LOG_MARKER}"'"' \
+    --data-urlencode "start=${start}" \
+    --data-urlencode "end=${end}" \
+    --data-urlencode 'limit=5')" || return 1
+  echo "${resp}" | jq -e '(.data.result | length) > 0' >/dev/null
+}
+
+echo "=== Querying Loki for the synthetic log (content: ${LOG_MARKER}) ==="
+if retry 180 "loki has the synthetic log" check_log; then
+  echo "OK: synthetic log traversed collector -> Loki (otlphttp/loki override leg works)."
+  exit 0
+fi
+
+# Didn't find it under service_name. Dump what Loki actually has so we can see
+# whether the OTLP logs landed under different labels (or not at all).
+echo "=== Loki introspection (debug) ==="
+echo "--- all label names ---"
+curl -sf "${LOKI_BASE}/loki/api/v1/labels" | jq -r '.data[]?' | sort -u | head -50 || true
+echo "--- service_name label values ---"
+curl -sf "${LOKI_BASE}/loki/api/v1/label/service_name/values" | jq -r '.data[]?' | sort -u | head -50 || true
+end="$(date +%s)000000000"; start="$(( $(date +%s) - 900 ))000000000"
+echo "--- streams seen in the last 15m (any service_name) ---"
+curl -sf -G "${LOKI_BASE}/loki/api/v1/query_range" \
+  --data-urlencode 'query={service_name=~".+"}' \
+  --data-urlencode "start=${start}" --data-urlencode "end=${end}" \
+  --data-urlencode 'limit=20' | jq -c '.data.result[]?.stream' | sort -u | head -30 || true
+echo "--- collector pod log (loki/export/error) ---"
+dbg_pod="$(otel_pod)"
+[[ -n "${dbg_pod}" ]] && kubectl -n "${MON_NS}" logs "${dbg_pod}" --tail=500 2>/dev/null \
+  | grep -iE 'loki|export|error|fail|drop|permanent|refused|[45][0-9][0-9]' \
+  | grep -ivE 'forbidden|reflector|pods is' | tail -30 || true
+exit 1

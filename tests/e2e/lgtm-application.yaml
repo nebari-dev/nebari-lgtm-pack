@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nebari-lgtm-pack
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "file://${GITOPS_DIR}"
+    targetRevision: HEAD
+    path: nebari-lgtm-pack
+    helm:
+      releaseName: nebari-lgtm-pack
+      values: |
+        # NebariApp CRD is still created (routing), but OAuth is disabled for
+        # this telemetry-focused e2e: with auth on, Grafana is wired to an
+        # OAuth client Secret the NebariApp operator provisions asynchronously
+        # after Keycloak realm setup, and it does not reliably materialize
+        # within CI's window — leaving Grafana in CreateContainerConfigError
+        # and the Application Degraded. OAuth/gateway login is out of scope
+        # here (see the design doc), so we run Grafana on admin/admin basic
+        # auth and verify telemetry flow instead.
+        nebariapp:
+          enabled: true
+          hostname: grafana.nebari.local
+          auth:
+            enabled: false
+        # The chart's grafana.envValueFrom references the OAuth client Secret
+        # unconditionally (no `optional: true`), so it must be nulled when auth
+        # is off or Grafana won't start. Mirrors the standalone test.yaml.
+        grafana:
+          envFromConfigMaps: null
+          envValueFrom: null
+        otelCollectorOverrides:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lgtm
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
