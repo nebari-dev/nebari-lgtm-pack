@@ -70,5 +70,22 @@ check_log() {
 }
 
 echo "=== Querying Loki for service_name=${SERVICE_NAME} ==="
-retry 180 "loki has the synthetic log" check_log
-echo "OK: synthetic log traversed collector -> Loki (otlphttp/loki override leg works)."
+if retry 180 "loki has the synthetic log" check_log; then
+  echo "OK: synthetic log traversed collector -> Loki (otlphttp/loki override leg works)."
+  exit 0
+fi
+
+# Didn't find it under service_name. Dump what Loki actually has so we can see
+# whether the OTLP logs landed under different labels (or not at all).
+echo "=== Loki introspection (debug) ==="
+echo "--- all label names ---"
+curl -sf "${LOKI_BASE}/loki/api/v1/labels" | jq -r '.data[]?' | sort -u | head -50 || true
+echo "--- service_name label values ---"
+curl -sf "${LOKI_BASE}/loki/api/v1/label/service_name/values" | jq -r '.data[]?' | sort -u | head -50 || true
+end="$(date +%s)000000000"; start="$(( $(date +%s) - 900 ))000000000"
+echo "--- streams seen in the last 15m (any service_name) ---"
+curl -sf -G "${LOKI_BASE}/loki/api/v1/query_range" \
+  --data-urlencode 'query={service_name=~".+"}' \
+  --data-urlencode "start=${start}" --data-urlencode "end=${end}" \
+  --data-urlencode 'limit=20' | jq -c '.data.result[]?.stream' | sort -u | head -30 || true
+exit 1
