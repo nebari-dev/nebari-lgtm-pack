@@ -20,16 +20,16 @@ SERVICE_NAME="lgtm-e2e-metrics"
 METRIC="lgtm_e2e_probe"
 
 # ── Reach the collector's OTLP/HTTP receiver (serviceless DaemonSet -> pod) ────
-POD="$(otel_pod)"
-[[ -n "${POD}" ]] || { echo "::error::no Running collector pod in ${MON_NS}"; kubectl -n "${MON_NS}" get pods || true; exit 1; }
-echo "Using collector pod: ${POD}"
+# ensure_otel_pf (called inside push) re-resolves the collector pod and
+# re-forwards if it's replaced mid-check, so a rollout doesn't wedge the push.
 OTEL_PORT=4318
-pf "${MON_NS}" "pod/${POD}" "${OTEL_PORT}" 4318
 OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
 
 # Push a synthetic OTLP gauge. Re-pushable (fresh timestamp each call).
+# shellcheck disable=SC2329  # invoked indirectly via retry "$@"
 push_metric() {
   local now_ns code
+  ensure_otel_pf "${OTEL_PORT}" || return 1
   now_ns="$(date +%s)000000000"
   code="$(curl -s -o /dev/null -w '%{http_code}' \
     -X POST "${OTEL_BASE}/v1/metrics" \
@@ -57,7 +57,7 @@ JSON
   [[ "${code}" == "200" || "${code}" == "202" ]]
 }
 
-echo "=== Pushing synthetic OTLP metric through collector ${POD}:4318 ==="
+echo "=== Pushing synthetic OTLP metric through the collector ==="
 retry 60 "collector accepts OTLP metric" push_metric
 
 # ── Read back from Mimir ──────────────────────────────────────────────────────

@@ -71,6 +71,34 @@ otel_pod() {
     | awk '$2=="Running" && $1 ~ /^opentelemetry-collector/ {print $1; exit}'
 }
 
+# ensure_otel_pf <local_port> -> guarantees a live port-forward to a CURRENT
+# collector pod's OTLP/HTTP receiver (4318) on <local_port>, re-resolving the
+# pod and re-forwarding if the previous one died. The collector DaemonSet pod
+# is replaced on rollouts (e.g. the chart's post-install rollout, or platform
+# upgrades), which would otherwise kill a pinned port-forward mid-check and make
+# every push silently fail. Call this before each push so a retry loop recovers
+# within one cycle. Returns non-zero if no Running collector pod is available
+# yet (caller's retry will try again).
+_OTEL_PF_PID=""
+ensure_otel_pf() {
+  local lport="$1" pod
+  if [[ -n "${_OTEL_PF_PID}" ]] && kill -0 "${_OTEL_PF_PID}" 2>/dev/null \
+     && nc -z 127.0.0.1 "${lport}" 2>/dev/null; then
+    return 0
+  fi
+  pod="$(otel_pod)"
+  [[ -n "${pod}" ]] || return 1
+  kubectl -n "${MON_NS}" port-forward "pod/${pod}" "${lport}:4318" >/dev/null 2>&1 &
+  _OTEL_PF_PID=$!
+  _PF_PIDS+=("${_OTEL_PF_PID}")
+  for _ in $(seq 1 20); do
+    nc -z 127.0.0.1 "${lport}" 2>/dev/null && return 0
+    kill -0 "${_OTEL_PF_PID}" 2>/dev/null || return 1
+    sleep 0.5
+  done
+  return 1
+}
+
 # retry <timeout_seconds> <description> <command...>
 # Runs the command repeatedly (every 5s) until it exits 0 or the timeout
 # elapses. The command's own stdout/stderr is suppressed; we print progress.

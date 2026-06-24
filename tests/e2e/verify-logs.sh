@@ -17,11 +17,9 @@ SERVICE_NAME="lgtm-e2e-logs"
 LOG_MARKER="lgtm-e2e-log-probe-marker"
 
 # ── Reach the collector's OTLP/HTTP receiver (serviceless DaemonSet -> pod) ────
-POD="$(otel_pod)"
-[[ -n "${POD}" ]] || { echo "::error::no Running collector pod in ${MON_NS}"; kubectl -n "${MON_NS}" get pods || true; exit 1; }
-echo "Using collector pod: ${POD}"
+# ensure_otel_pf (called inside push) re-resolves the collector pod and
+# re-forwards if it's replaced mid-check, so a rollout doesn't wedge the push.
 OTEL_PORT=4318
-pf "${MON_NS}" "pod/${POD}" "${OTEL_PORT}" 4318
 OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
 
 # Push a synthetic OTLP log. Re-pushable (fresh timestamp each call) so the
@@ -29,6 +27,7 @@ OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
 # shellcheck disable=SC2329  # invoked indirectly via retry "$@"
 push_log() {
   local now_ns code
+  ensure_otel_pf "${OTEL_PORT}" || return 1
   now_ns="$(date +%s)000000000"
   code="$(curl -s -o /dev/null -w '%{http_code}' \
     -X POST "${OTEL_BASE}/v1/logs" \
@@ -52,7 +51,7 @@ JSON
   [[ "${code}" == "200" || "${code}" == "202" ]]
 }
 
-echo "=== Pushing synthetic OTLP log through collector ${POD}:4318 ==="
+echo "=== Pushing synthetic OTLP log through the collector ==="
 retry 60 "collector accepts OTLP log" push_log
 
 # ── Read back from Loki ───────────────────────────────────────────────────────
@@ -96,7 +95,8 @@ curl -sf -G "${LOKI_BASE}/loki/api/v1/query_range" \
   --data-urlencode "start=${start}" --data-urlencode "end=${end}" \
   --data-urlencode 'limit=20' | jq -c '.data.result[]?.stream' | sort -u | head -30 || true
 echo "--- collector pod log (loki/export/error) ---"
-kubectl -n "${MON_NS}" logs "${POD}" --tail=500 2>/dev/null \
+dbg_pod="$(otel_pod)"
+[[ -n "${dbg_pod}" ]] && kubectl -n "${MON_NS}" logs "${dbg_pod}" --tail=500 2>/dev/null \
   | grep -iE 'loki|export|error|fail|drop|permanent|refused|[45][0-9][0-9]' \
   | grep -ivE 'forbidden|reflector|pods is' | tail -30 || true
 exit 1

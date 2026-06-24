@@ -15,21 +15,20 @@ TRACE_ID="0af7651916cd43dd8448eb211c80319c"
 SPAN_ID="b7ad6b7169203331"
 
 # ── Reach the collector's OTLP/HTTP receiver (serviceless DaemonSet -> pod) ────
-# NIC deploys the collector as a DaemonSet with no Service, so port-forward to
-# a collector pod rather than a service name.
-POD="$(otel_pod)"
-[[ -n "${POD}" ]] || { echo "::error::no Running collector pod in ${MON_NS}"; kubectl -n "${MON_NS}" get pods || true; exit 1; }
-echo "Using collector pod: ${POD}"
+# NIC deploys the collector as a DaemonSet with no Service. ensure_otel_pf
+# (called inside push) re-resolves the pod and re-forwards if it's replaced
+# mid-check, so a collector rollout doesn't wedge the push.
 OTEL_PORT=4318
-pf "${MON_NS}" "pod/${POD}" "${OTEL_PORT}" 4318
 OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
 
 # Minimal OTLP/HTTP trace payload. start/end are unix-nano; any recent value is
 # fine for ingest. Timestamps are recomputed on every push (below) so they stay
 # fresh across the retry window; TRACE_ID/SPAN_ID stay static for the lookup.
-echo "=== Pushing synthetic span to collector ${POD}:4318 ==="
+echo "=== Pushing synthetic span through the collector ==="
+# shellcheck disable=SC2329  # invoked indirectly via retry "$@"
 push_span() {
   local now_ns start_ns span_json code
+  ensure_otel_pf "${OTEL_PORT}" || return 1
   now_ns="$(date +%s)000000000"
   start_ns="$(( $(date +%s) - 1 ))000000000"
   span_json="$(cat <<JSON
