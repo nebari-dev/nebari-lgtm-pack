@@ -22,6 +22,7 @@ OTEL_BASE="http://127.0.0.1:${OTEL_PORT}"
 
 # Push a synthetic OTLP log. Re-pushable (fresh timestamp each call) so the
 # readback loop can keep nudging until Loki has ingested it.
+# shellcheck disable=SC2329  # invoked indirectly via retry "$@"
 push_log() {
   local now_ns code
   now_ns="$(date +%s)000000000"
@@ -56,6 +57,7 @@ pf "${LGTM_NS}" "svc/${LOKI_SVC}" "${LOKI_PORT}" 3100
 LOKI_BASE="http://127.0.0.1:${LOKI_PORT}"
 
 # Loki maps the OTLP resource attribute service.name -> the service_name label.
+# shellcheck disable=SC2329  # invoked indirectly via retry "$@"
 check_log() {
   push_log || true
   local end start resp
@@ -88,4 +90,8 @@ curl -sf -G "${LOKI_BASE}/loki/api/v1/query_range" \
   --data-urlencode 'query={service_name=~".+"}' \
   --data-urlencode "start=${start}" --data-urlencode "end=${end}" \
   --data-urlencode 'limit=20' | jq -c '.data.result[]?.stream' | sort -u | head -30 || true
+echo "--- collector pod log (loki/export/error) ---"
+kubectl -n "${MON_NS}" logs "${POD}" --tail=500 2>/dev/null \
+  | grep -iE 'loki|export|error|fail|drop|permanent|refused|[45][0-9][0-9]' \
+  | grep -ivE 'forbidden|reflector|pods is' | tail -30 || true
 exit 1
