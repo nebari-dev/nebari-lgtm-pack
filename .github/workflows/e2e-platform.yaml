@@ -70,7 +70,10 @@ jobs:
           echo "=== OTel collector override CM ==="
           kubectl get cm opentelemetry-collector-overrides -n monitoring -o yaml || true
           echo "=== OTel collector logs ==="
-          kubectl logs -n monitoring daemonset/opentelemetry-collector-agent --tail=200 || true
+          # Resolve the collector pod by name prefix (its exact name varies
+          # across NIC versions, same reason lib.sh's otel_pod uses a prefix).
+          collector_pod="$(kubectl get pods -n monitoring -o name | grep -m1 opentelemetry-collector || true)"
+          [ -n "$collector_pod" ] && kubectl logs -n monitoring "$collector_pod" --tail=200 || true
           echo "=== Grafana logs ==="
           kubectl logs -n lgtm -l app.kubernetes.io/name=grafana --tail=100 || true
           echo "=== Events (lgtm) ==="

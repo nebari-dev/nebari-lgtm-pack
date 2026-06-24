@@ -1,7 +1,16 @@
 # LGTM pack end-to-end platform test — design
 
 **Date:** 2026-06-22
-**Status:** Approved
+**Status:** Approved — partially superseded during implementation.
+
+> **Superseded note:** CI testing against a real NIC revealed that the
+> collector override + organic scraping only work on NIC ≥ v0.8.0 (PR #331).
+> The logs and metrics checks were pivoted from *organic* sources
+> (Promtail-shipped logs; cAdvisor/kubelet/kube-state metrics) to *synthetic
+> OTLP pushed through the collector* — which tests the pack's actual contract
+> (the override export pipeline) deterministically. The final, authoritative
+> description of what each check does is `tests/e2e/README.md`. Sections below
+> that describe the organic approach are kept as historical record.
 
 ## Goal
 
