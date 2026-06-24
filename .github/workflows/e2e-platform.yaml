@@ -25,12 +25,31 @@ jobs:
       - name: Vendor chart dependencies
         run: helm dependency update chart
 
-      - name: Bootstrap Nebari platform (NIC latest)
+      # Building NIC from source (non-release nic-version below) needs Go.
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5.5.0
+        with:
+          go-version: "1.25"
+
+      - name: Bootstrap Nebari platform
         id: sandbox
         uses: nebari-dev/action-nebari-sandbox@09f542cdbcb0ed74307f86fee4f8ad0053a4cd8f  # v2.0.2
         with:
           profile: platform
-          # nic-version defaults to 'latest' (prebuilt binary, no Go needed).
+          # TEMPORARY: pin NIC to a main commit, built from source.
+          #
+          # This pack's collector override (the opentelemetry-collector-overrides
+          # ConfigMap) only takes effect on NIC that includes the software-pack
+          # extension point + collector scrape RBAC from
+          # https://github.com/nebari-dev/nebari-infrastructure-core/pull/331
+          # (merged 2026-06-17). That is NOT in the latest NIC release (v0.6.0,
+          # 2026-06-01): on it the override is ignored and telemetry goes to the
+          # collector's debug exporter, so the telemetry checks below cannot pass.
+          #
+          # ACTION ITEM before merging this PR: switch back to a released
+          # nic-version (drop this pin and the Go setup step above) once a NIC
+          # release includes #331. Tracked in the PR description.
+          nic-version: 4c3ca4dc64e97237a8eb8f448923974373c64700  # nebari-dev/nebari-infrastructure-core main @ 2026-06-22
 
       - name: Surface KUBECONFIG for sub-action wait + verification
         run: echo "KUBECONFIG=${{ steps.sandbox.outputs.kubeconfig }}" >> "$GITHUB_ENV"
